@@ -33,17 +33,22 @@ Créer un jeu d'échecs fonctionnel pour deux joueurs en local utilisant la bibl
 - [x] Empêcher un joueur de bouger les pièces de l'adversaire.
 - [x] Gestion des captures (enlever la pièce adverse du plateau).
 
-### 🟦 Étape 5 : Coups Spéciaux & Fin de match
-- [ ] Le Roque (Coup spécial Roi + Tour).
-- [ ] Promotion du pion (Transformer le pion arrivé au bout).
-- [ ] Détection de l'échec.
-- [ ] Prise en passant.
-- [ ] Échec et Mat.
-- [ ] Fin de partie (Affichage du vainqueur).
+### 🟦 Étape 5 : Coups Spéciaux & Fin de match (Terminée)
+- [x] Le Roque (Coup spécial Roi + Tour).
+- [x] Promotion du pion (Transformer le pion arrivé au bout).
+- [x] Détection de l'échec.
+- [x] Prise en passant.
+- [x] Échec et Mat.
+- [x] Abandonner (Bouton pour déclarer forfait).
+- [x] Fin de partie (Affichage du vainqueur).
 
----
-
-## 🛠 Notes Techniques
+### 🟦 Étape 6 : Gestion des Parties Nulles (Draws) (Terminée)
+- [x] Le Pat (Stalemate).
+- [x] Règle des 50 coups (Aucune capture ni mouvement de pion).
+- [x] Triple répétition de la position.
+- [x] Manque de matériel (Impossibilité de mater).
+- [x] Accord mutuel (Proposition/Acceptation de nulle).
+- [ ] (Optionnel) Manque de temps contre manque de matériel.
 - **Bibliothèque :** Pygame
 - **Dimensions :** Grille 8x8, cases de 118px.
 - **Images :** Dossier `./Image/`

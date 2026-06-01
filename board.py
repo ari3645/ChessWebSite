@@ -8,7 +8,63 @@ class Board:
             (0, 0): False, (0, 4): False, (0, 7): False, # Noirs
             (7, 0): False, (7, 4): False, (7, 7): False  # Blancs
         }
-        self.en_passant_target = None # Stocke (row, col) du pion prenable en passant
+        self.en_passant_target = None
+        self.half_move_clock = 0
+        self.position_history = {} # Stocke l'empreinte de la position et son occurrence
+
+    def get_position_signature(self):
+        """Crée une signature unique pour la position actuelle (plateau + tour + roque + en passant)."""
+        board_str = "".join(["".join([p if p != "" else "." for p in row]) for row in self.grid])
+        # On inclut le tour et les droits de roque dans la signature
+        moved_str = "".join(["1" if self.moved_status[k] else "0" for k in sorted(self.moved_status.keys())])
+        ep_str = str(self.en_passant_target)
+        return f"{board_str}|{self.turn}|{moved_str}|{ep_str}"
+
+    def is_threefold_repetition(self):
+        """Vérifie si la position actuelle s'est répétée 3 fois."""
+        sig = self.get_position_signature()
+        return self.position_history.get(sig, 0) >= 3
+
+    def is_insufficient_material(self):
+        """Vérifie s'il reste assez de pièces pour mater."""
+        white_pieces = []
+        black_pieces = []
+        for r in range(ROWS):
+            for c in range(COLS):
+                p = self.grid[r][c]
+                if p != "":
+                    if p[1] == 'b': white_pieces.append(p[0])
+                    else: black_pieces.append(p[0])
+        
+        # Cas Roi contre Roi
+        if len(white_pieces) == 1 and len(black_pieces) == 1:
+            return True
+            
+        # Roi + Fou ou Roi + Cavalier contre Roi
+        if len(white_pieces) <= 2 and len(black_pieces) <= 2:
+            w_mats = [p for p in white_pieces if p in ['p', 't', 'd']]
+            n_mats = [p for p in black_pieces if p in ['p', 't', 'd']]
+            if not w_mats and not n_mats:
+                return True
+                
+        return False
+
+    def is_stalemate(self, color):
+        """Vérifie s'il y a Pat (pas en échec mais aucun coup possible)."""
+        if self.is_in_check(color):
+            return False
+            
+        for r in range(ROWS):
+            for c in range(COLS):
+                piece = self.grid[r][c]
+                if piece != "" and piece[1] == color:
+                    if self.get_valid_moves_internal((r, c)):
+                        return False
+        return True
+
+    def is_fifty_move_rule(self):
+        """La règle des 50 coups est atteinte si 100 demi-coups sans capture ni pion."""
+        return self.half_move_clock >= 100
 
     def get_piece(self, row, col):
         if 0 <= row < ROWS and 0 <= col < COLS:
@@ -139,12 +195,18 @@ class Board:
 
     def move_piece(self, start_pos, end_pos, promotion_choice='d'):
         """Déplace une pièce, gère les coups spéciaux et change de tour."""
-        # On vérifie is_valid_move ET que ça ne laisse pas en échec
         if self.is_valid_move(start_pos, end_pos) and not self.leaves_king_in_check(start_pos, end_pos):
             start_row, start_col = start_pos
             end_row, end_col = end_pos
             piece = self.grid[start_row][start_col]
+            target = self.grid[end_row][end_col]
             
+            # Gestion du half_move_clock (Règle des 50 coups)
+            if piece[0] == 'p' or target != "":
+                self.half_move_clock = 0
+            else:
+                self.half_move_clock += 1
+
             new_en_passant_target = None
 
             # Roque
@@ -181,6 +243,10 @@ class Board:
             self.en_passant_target = new_en_passant_target
             if start_pos in self.moved_status:
                 self.moved_status[start_pos] = True
+            
+            # Enregistrement de la position dans l'historique (pour triple répétition)
+            sig = self.get_position_signature()
+            self.position_history[sig] = self.position_history.get(sig, 0) + 1
             
             self.turn = 'n' if self.turn == 'b' else 'b'
             return True
