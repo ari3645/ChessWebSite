@@ -3,6 +3,7 @@ import os
 from src.constants import ROWS, COLS, PIECE_SCALE
 from src.board import Board
 from src.renderer import Renderer
+from src.ui import Button
 
 class GameController:
     def __init__(self):
@@ -34,9 +35,6 @@ class GameController:
         self.renderer = Renderer(self.screen, self.square_size, self.sidebar_width, 
                                  self.piece_size, self.piece_offset, self.images, self.fonts)
         
-        self.reset_game_state()
-        self.state = "MENU"
-        
         # Gestion des joueurs et scores
         self.player1_name = "Joueur 1"
         self.player2_name = "Joueur 2"
@@ -45,27 +43,75 @@ class GameController:
         self.p1_is_white = True
         self.active_input = None
         
-        # Définition des zones de clic (Rects)
+        # Contrôle du temps
+        self.time_controls = [
+            ("10 min + 15s", 10 * 60, 15),
+            ("3 min + 2s", 3 * 60, 2),
+            ("1 min + 0s", 1 * 60, 0),
+            ("Sans temps", None, None)
+        ]
+        self.selected_time_idx = 0
+        self.time_p1 = None
+        self.time_p2 = None
+        self.increment = 0
+        self.winner_by_timeout = None
+        self.time_menu_open = False
+        self.last_tick_time = pygame.time.get_ticks()
+        self.flash_timer = 0
+        self.auto_rotate = False
+        self.state = "MENU"
+        self.game_over = False
+        self.waiting_for_promotion = None
+        self.selected_sq = None
+        self.valid_moves = []
+        self.draw_offered_by = None
+        self.winner_by_resign = None
+        self.mutual_draw = False
+
+        # Définition des zones de clic (Rects et Buttons)
         self.init_ui_rects()
 
     def init_ui_rects(self):
         total_w = self.width + self.sidebar_width
         center_x = total_w // 2
+        y_center = 280
         
-        # Menu
-        self.input_p1_rect = pygame.Rect(center_x - 150, 220, 300, 45)
-        self.input_p2_rect = pygame.Rect(center_x - 150, 290, 300, 45)
-        self.btn_clear1_rect = pygame.Rect(self.input_p1_rect.right + 10, 220, 100, 45)
-        self.btn_clear2_rect = pygame.Rect(self.input_p2_rect.right + 10, 290, 100, 45)
-        self.btn_play_rect = pygame.Rect(center_x - 100, 400, 200, 60)
-        self.btn_quit_rect = pygame.Rect(center_x - 100, 500, 200, 60)
+        # Largeurs
+        input_w = 200
+        clear_w = 80
+        time_w = 200
+        spacing = 15
         
-        # Game Over
-        self.btn_replay_rect = pygame.Rect(total_w // 2 - 210, self.height // 2 + 80, 200, 50)
-        self.btn_back_menu_rect = pygame.Rect(total_w // 2 + 10, self.height // 2 + 80, 200, 50)
+        # Calcul du début de la ligne pour centrer l'ensemble
+        # (Input1 + Clear1 + Input2 + Clear2 + Time) + spacing
+        total_line_w = (input_w * 2) + (clear_w * 2) + time_w + (spacing * 4)
+        start_x = (total_w - total_line_w) // 2
+
+        # Inputs
+        self.input_p1_rect = pygame.Rect(start_x, y_center, input_w, 45)
+        self.btn_clear1 = Button((self.input_p1_rect.right + spacing, y_center, clear_w, 45), (80, 80, 80), "Effacer", self.fonts['small'])
         
-        # Sidebar
-        self.btn_rotate_rect = pygame.Rect(self.width + 25, self.height - 60, 200, 40)
+        self.input_p2_rect = pygame.Rect(self.btn_clear1.rect.right + spacing, y_center, input_w, 45)
+        self.btn_clear2 = Button((self.input_p2_rect.right + spacing, y_center, clear_w, 45), (80, 80, 80), "Effacer", self.fonts['small'])
+        
+        self.btn_time = Button((self.btn_clear2.rect.right + spacing, y_center, time_w, 45), (100, 100, 150), f"{self.time_controls[self.selected_time_idx][0]}", self.fonts['btn'])
+
+        # Dropdown options (sous le bouton temps)
+        self.time_option_buttons = []
+        for i in range(len(self.time_controls)):
+            rect = (self.btn_time.rect.x, self.btn_time.rect.bottom + i * 35, time_w, 35)
+            self.time_option_buttons.append(Button(rect, (40, 40, 60), self.time_controls[i][0], self.fonts['small']))
+
+        # Action Buttons (en bas)
+        self.btn_play = Button((center_x - 100, self.height - 150, 200, 60), (50, 200, 50), "JOUER", self.fonts['btn'], border_radius=10)
+        self.btn_quit = Button((center_x - 100, self.height - 70, 200, 50), (200, 50, 50), "QUITTER", self.fonts['btn'], border_radius=10)
+
+        # Game Over Buttons
+        self.btn_replay = Button((total_w // 2 - 210, self.height // 2 + 80, 200, 50), (50, 200, 50), "Rejouer", self.fonts['btn'])
+        self.btn_back_menu = Button((total_w // 2 + 10, self.height // 2 + 80, 200, 50), (100, 100, 150), "Menu Principal", self.fonts['btn'])
+        
+        # Sidebar Base Buttons
+        self.btn_rotate = Button((self.width + 25, self.height - 60, 200, 40), (96, 96, 96), "Rotation Auto : OFF", self.fonts['small'])
 
     def reset_game_state(self, switch_colors=False):
         self.board = Board()
@@ -76,9 +122,21 @@ class GameController:
         self.game_over = False
         self.draw_offered_by = None
         self.winner_by_resign = None
+        self.winner_by_timeout = None
         self.mutual_draw = False
         self.auto_rotate = False
         
+        # Initialisation du temps
+        _, base_time, self.increment = self.time_controls[self.selected_time_idx]
+        if base_time is not None:
+            self.time_p1 = base_time * 1000 # ms
+            self.time_p2 = base_time * 1000
+        else:
+            self.time_p1 = None
+            self.time_p2 = None
+        
+        self.last_tick_time = pygame.time.get_ticks()
+
         if switch_colors:
             self.p1_is_white = not self.p1_is_white
 
@@ -93,17 +151,31 @@ class GameController:
                 print(f"Erreur de chargement for {path}: {e}")
 
     def handle_menu_click(self, pos):
+        # Si le menu de temps est ouvert, on vérifie d'abord les clics dessus
+        if self.time_menu_open:
+            for i, btn in enumerate(self.time_option_buttons):
+                if btn.is_clicked(pos):
+                    self.selected_time_idx = i
+                    self.time_menu_open = False
+                    self.btn_time.update_text(f"Temps : {self.time_controls[i][0]}")
+                    return True
+            if not self.btn_time.is_clicked(pos):
+                self.time_menu_open = False
+                return True
+
         if self.input_p1_rect.collidepoint(pos):
             self.active_input = 1
         elif self.input_p2_rect.collidepoint(pos):
             self.active_input = 2
-        elif self.btn_clear1_rect.collidepoint(pos):
+        elif self.btn_clear1.is_clicked(pos):
             self.player1_name = ""
             self.active_input = 1
-        elif self.btn_clear2_rect.collidepoint(pos):
+        elif self.btn_clear2.is_clicked(pos):
             self.player2_name = ""
             self.active_input = 2
-        elif self.btn_play_rect.collidepoint(pos):
+        elif self.btn_time.is_clicked(pos):
+            self.time_menu_open = not self.time_menu_open
+        elif self.btn_play.is_clicked(pos):
             p1_n = self.player1_name.strip()
             p2_n = self.player2_name.strip()
             if p1_n != "" and p2_n != "" and p1_n.lower() != p2_n.lower():
@@ -111,17 +183,17 @@ class GameController:
                 self.score_p1 = 0.0
                 self.score_p2 = 0.0
                 self.state = "PLAYING"
-        elif self.btn_quit_rect.collidepoint(pos):
+        elif self.btn_quit.is_clicked(pos):
             return False
         else:
             self.active_input = None
         return True
 
     def handle_game_over_click(self, pos):
-        if self.btn_replay_rect.collidepoint(pos):
+        if self.btn_replay.is_clicked(pos):
             self.reset_game_state(switch_colors=True)
             self.state = "PLAYING"
-        elif self.btn_back_menu_rect.collidepoint(pos):
+        elif self.btn_back_menu.is_clicked(pos):
             self.state = "MENU"
 
     def handle_promotion_click(self, pos):
@@ -135,12 +207,21 @@ class GameController:
             choice = options[idx]
             
             start_sq, end_sq = self.waiting_for_promotion
-            self.board.move_piece(start_sq, end_sq, choice)
+            # Avant le coup, on note qui joue pour l'incrément
+            p1_played = (self.board.turn == 'b' and self.p1_is_white) or (self.board.turn == 'n' and not self.p1_is_white)
             
-            if self.board.is_checkmate(self.board.turn) or \
-               self.board.is_stalemate(self.board.turn) or \
-               self.board.is_fifty_move_rule():
-                self.game_over = True
+            if self.board.move_piece(start_sq, end_sq, choice):
+                # Incrément
+                if self.time_p1 is not None:
+                    if p1_played: self.time_p1 += self.increment * 1000
+                    else: self.time_p2 += self.increment * 1000
+
+                if self.board.is_checkmate(self.board.turn) or \
+                   self.board.is_stalemate(self.board.turn) or \
+                   self.board.is_fifty_move_rule() or \
+                   self.board.is_threefold_repetition() or \
+                   self.board.is_insufficient_material():
+                    self.game_over = True
                 
             self.waiting_for_promotion = None
             self.selected_sq = None
@@ -176,7 +257,15 @@ class GameController:
                         self.waiting_for_promotion = (self.selected_sq, (row, col))
                         return
 
+                # Avant le coup, on note qui joue pour l'incrément
+                p1_played = (self.board.turn == 'b' and self.p1_is_white) or (self.board.turn == 'n' and not self.p1_is_white)
+
                 if self.board.move_piece(self.selected_sq, (row, col)):
+                    # Incrément
+                    if self.time_p1 is not None:
+                        if p1_played: self.time_p1 += self.increment * 1000
+                        else: self.time_p2 += self.increment * 1000
+
                     self.selected_sq = None
                     self.valid_moves = []
                     self.draw_offered_by = None
@@ -205,35 +294,49 @@ class GameController:
                 self.valid_moves = self.board.get_valid_moves(self.selected_sq)
 
     def handle_sidebar_click(self, pos):
-        if self.btn_rotate_rect.collidepoint(pos):
+        if self.btn_rotate.is_clicked(pos):
             self.auto_rotate = not self.auto_rotate
+            self.btn_rotate.update_text("Rotation Auto : ON" if self.auto_rotate else "Rotation Auto : OFF")
             return
 
         color = 'n' if pos[1] < self.height // 2 else 'b'
         y_offset = 0 if color == 'n' else self.height // 2
         
-        btn_resign_rect = pygame.Rect(self.width + 25, y_offset + 70, 200, 45)
-        btn_draw_rect = pygame.Rect(self.width + 25, y_offset + 130, 200, 45)
+        # Le décalage vertical dépend de si le temps est affiché ou non
+        y_name_offset = 55 if self.time_p1 is not None else 20
         
-        if btn_resign_rect.collidepoint(pos):
+        # Boutons dynamiques (on les définit "à la volée" pour le clic mais ils seront gérés proprement)
+        btn_resign = Button((self.width + 25, y_offset + y_name_offset + 50, 200, 45), (200, 50, 50), "Abandonner", self.fonts['btn'])
+        
+        if btn_resign.is_clicked(pos):
             self.winner_by_resign = 'b' if color == 'n' else 'n'
             self.game_over = True
-        elif self.draw_offered_by is None:
-            if btn_draw_rect.collidepoint(pos):
-                self.draw_offered_by = color
-        elif self.draw_offered_by != color:
-            btn_accept_rect = pygame.Rect(self.width + 25, y_offset + 130, 95, 45)
-            btn_refuse_rect = pygame.Rect(self.width + 130, y_offset + 130, 95, 45)
-            if btn_accept_rect.collidepoint(pos):
+            return
+
+        if self.draw_offered_by == color:
+            return # Déjà proposé
+
+        if self.draw_offered_by is not None:
+            # On vérifie Accepter / Refuser
+            btn_accept = Button((self.width + 25, y_offset + y_name_offset + 110, 95, 45), (50, 200, 50), "Accepter", self.fonts['small'])
+            btn_refuse = Button((self.width + 130, y_offset + y_name_offset + 110, 95, 45), (200, 50, 50), "Refuser", self.fonts['small'])
+            if btn_accept.is_clicked(pos):
                 self.mutual_draw = True
                 self.game_over = True
-            elif btn_refuse_rect.collidepoint(pos):
+            elif btn_refuse.is_clicked(pos):
                 self.draw_offered_by = None
+        else:
+            # On vérifie Proposer
+            btn_draw = Button((self.width + 25, y_offset + y_name_offset + 110, 200, 45), (100, 100, 150), "Proposer Nulle", self.fonts['btn'])
+            if btn_draw.is_clicked(pos):
+                self.draw_offered_by = color
 
     def update_scores(self):
         winner = None
         if self.winner_by_resign:
             winner = self.winner_by_resign
+        elif self.winner_by_timeout:
+            winner = self.winner_by_timeout
         elif self.board.is_checkmate(self.board.turn):
             winner = 'b' if self.board.turn == 'n' else 'n'
         
@@ -251,8 +354,32 @@ class GameController:
         clock = pygame.time.Clock()
         running = True
         while running:
+            current_time = pygame.time.get_ticks()
+            dt = current_time - self.last_tick_time
+            self.last_tick_time = current_time
+
             if self.flash_timer > 0:
                 self.flash_timer -= 1
+
+            # Gestion du temps
+            if self.state == "PLAYING" and not self.game_over and self.time_p1 is not None:
+                active_is_p1 = (self.board.turn == 'b' and self.p1_is_white) or (self.board.turn == 'n' and not self.p1_is_white)
+                if active_is_p1:
+                    self.time_p1 -= dt
+                    if self.time_p1 <= 0:
+                        self.time_p1 = 0
+                        self.game_over = True
+                        self.winner_by_timeout = 'n' if self.p1_is_white else 'b'
+                        self.state = "GAME_OVER"
+                        self.update_scores()
+                else:
+                    self.time_p2 -= dt
+                    if self.time_p2 <= 0:
+                        self.time_p2 = 0
+                        self.game_over = True
+                        self.winner_by_timeout = 'b' if self.p1_is_white else 'n'
+                        self.state = "GAME_OVER"
+                        self.update_scores()
 
             # Titre
             if self.state == "MENU":
@@ -292,20 +419,19 @@ class GameController:
                         elif self.active_input == 2 and len(self.player2_name) < 15:
                             self.player2_name += event.unicode
             
-            # Rendu
+            # Rendu (on passe le contrôleur pour que le renderer puisse accéder aux boutons)
             if self.state == "MENU":
                 names_ok = self.player1_name.strip() != "" and self.player2_name.strip() != ""
                 names_diff = self.player1_name.strip().lower() != self.player2_name.strip().lower()
-                self.renderer.draw_menu(self.player1_name, self.player2_name, self.active_input, names_ok and names_diff)
+                self.renderer.draw_menu(self, names_ok and names_diff)
             else:
                 self.renderer.draw_board(self.board, self.selected_sq, self.flash_timer, self.auto_rotate)
                 self.renderer.draw_valid_moves(self.board, self.valid_moves, self.auto_rotate)
                 self.renderer.draw_pieces(self.board, self.auto_rotate)
-                self.renderer.draw_sidebar(self.player1_name, self.player2_name, self.score_p1, self.score_p2, 
-                                           self.p1_is_white, self.auto_rotate, self.draw_offered_by)
+                self.renderer.draw_sidebar(self)
                 self.renderer.draw_promotion_menu(self.board.turn, self.waiting_for_promotion)
                 if self.state == "GAME_OVER":
-                    self.renderer.draw_game_over(self.board, self.winner_by_resign, self.mutual_draw)
+                    self.renderer.draw_game_over(self)
             
             pygame.display.flip()
             clock.tick(60)

@@ -53,9 +53,12 @@ Créer un jeu d'échecs fonctionnel pour deux joueurs en local utilisant la bibl
 - [x] Manque de matériel (Impossibilité de mater).
 - [x] Accord mutuel (Proposition/Acceptation de nulle).
 
-### 🟦 Étape 7 : Polissage et Améliorations (À venir)
+### 🟦 Étape 7 : Polissage et Améliorations (En cours)
+- [x] Réorganisation professionnelle de la structure des dossiers (src, assets, docs, tests).
+- [x] Système de chronomètre (Timer Blitz/Rapid/Bullet) avec incréments.
+- [x] Refonte de l'interface avec une classe Button (Hitboxes fiables, effets hover).
+- [x] Nouveau design horizontal pour le menu principal.
 - [ ] Ajouter des effets sonores (déplacement, capture, échec).
-- [ ] Système de chronomètre (Timer Blitz/Rapid).
 - [ ] Historique des coups (notation algébrique standard).
 - [ ] Menu de paramètres (choix des thèmes de couleurs et de l'apparence des pièces).
 - [ ] (Optionnel) Sauvegarde et chargement de partie.
@@ -65,5 +68,5 @@ Créer un jeu d'échecs fonctionnel pour deux joueurs en local utilisant la bibl
 **Stack Technique :**
 - **Langage :** Python 3.x
 - **Bibliothèque :** Pygame
-- **Architecture :** Modulaire / MVC
-- **Images :** Dossier `./Image/`
+- **Architecture :** Modulaire / MVC / Professionnelle
+- **Images :** Dossier `./assets/images/`

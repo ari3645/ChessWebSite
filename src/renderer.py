@@ -1,5 +1,6 @@
 import pygame
 from src.constants import ROWS, COLS, WHITE, GRAY, BLACK, DARK_GRAY, BLUE_HIGHLIGHT, RED, GREEN
+from src.ui import Button
 
 class Renderer:
     def __init__(self, screen, square_size, sidebar_width, piece_size, piece_offset, images, fonts):
@@ -91,56 +92,50 @@ class Renderer:
             y = menu_y + self.piece_offset
             self.screen.blit(piece_img, (x, y))
 
-    def draw_menu(self, player1_name, player2_name, active_input, can_play):
+    def draw_menu(self, controller, can_play):
         self.screen.fill(DARK_GRAY)
         total_w = self.width + self.sidebar_width
         
         title = self.fonts['title'].render("JEU D'ÉCHECS", True, WHITE)
         self.screen.blit(title, (total_w // 2 - title.get_width() // 2, 80))
         
-        y_input = 220
-        center_x = total_w // 2
+        # Inputs (Rects)
+        color_p1 = GREEN if controller.active_input == 1 else WHITE
+        pygame.draw.rect(self.screen, color_p1, controller.input_p1_rect, 2, border_radius=5)
+        cursor1 = "|" if controller.active_input == 1 and (pygame.time.get_ticks() // 500) % 2 == 0 else ""
+        txt_p1 = self.fonts['btn'].render(f"P1: {controller.player1_name}{cursor1}", True, WHITE)
+        self.screen.blit(txt_p1, (controller.input_p1_rect.x + 10, controller.input_p1_rect.centery - txt_p1.get_height() // 2))
         
-        input_p1_rect = pygame.Rect(center_x - 150, y_input, 300, 45)
-        input_p2_rect = pygame.Rect(center_x - 150, y_input + 70, 300, 45)
+        color_p2 = GREEN if controller.active_input == 2 else WHITE
+        pygame.draw.rect(self.screen, color_p2, controller.input_p2_rect, 2, border_radius=5)
+        cursor2 = "|" if controller.active_input == 2 and (pygame.time.get_ticks() // 500) % 2 == 0 else ""
+        txt_p2 = self.fonts['btn'].render(f"P2: {controller.player2_name}{cursor2}", True, WHITE)
+        self.screen.blit(txt_p2, (controller.input_p2_rect.x + 10, controller.input_p2_rect.centery - txt_p2.get_height() // 2))
+
+        # Draw Buttons
+        controller.btn_clear1.draw(self.screen)
+        controller.btn_clear2.draw(self.screen)
+        controller.btn_time.draw(self.screen)
         
-        # P1
-        color_p1 = GREEN if active_input == 1 else WHITE
-        pygame.draw.rect(self.screen, color_p1, input_p1_rect, 2, border_radius=5)
-        cursor1 = "|" if active_input == 1 and (pygame.time.get_ticks() // 500) % 2 == 0 else ""
-        txt_p1 = self.fonts['btn'].render(f"P1: {player1_name}{cursor1}", True, WHITE)
-        self.screen.blit(txt_p1, (input_p1_rect.x + 10, input_p1_rect.centery - txt_p1.get_height() // 2))
-        
-        # P2
-        color_p2 = GREEN if active_input == 2 else WHITE
-        pygame.draw.rect(self.screen, color_p2, input_p2_rect, 2, border_radius=5)
-        cursor2 = "|" if active_input == 2 and (pygame.time.get_ticks() // 500) % 2 == 0 else ""
-        txt_p2 = self.fonts['btn'].render(f"P2: {player2_name}{cursor2}", True, WHITE)
-        self.screen.blit(txt_p2, (input_p2_rect.x + 10, input_p2_rect.centery - txt_p2.get_height() // 2))
+        if controller.time_menu_open:
+            # Menu de temps est dessiné au-dessus de tout
+            # On dessine un fond pour le menu
+            bg_rect = pygame.Rect(controller.btn_time.rect.x, controller.btn_time.rect.bottom, controller.btn_time.rect.width, len(controller.time_option_buttons) * 35)
+            pygame.draw.rect(self.screen, (30, 30, 50), bg_rect)
+            pygame.draw.rect(self.screen, WHITE, bg_rect, 1)
+            for i, btn in enumerate(controller.time_option_buttons):
+                # Highlight if selected
+                if i == controller.selected_time_idx:
+                    pygame.draw.rect(self.screen, (100, 100, 200), btn.rect)
+                    pygame.draw.rect(self.screen, WHITE, btn.rect, 1)
+                btn.draw(self.screen)
 
-        # Buttons Clear
-        btn_clear1_rect = pygame.Rect(input_p1_rect.right + 10, input_p1_rect.y, 100, 45)
-        btn_clear2_rect = pygame.Rect(input_p2_rect.right + 10, input_p2_rect.y, 100, 45)
-        
-        for rect in [btn_clear1_rect, btn_clear2_rect]:
-            pygame.draw.rect(self.screen, (80, 80, 80), rect, border_radius=5)
-            txt_clear = self.fonts['small'].render("Effacer", True, WHITE)
-            self.screen.blit(txt_clear, (rect.centerx - txt_clear.get_width() // 2, rect.centery - txt_clear.get_height() // 2))
+        controller.btn_play.color = GREEN if can_play else GRAY
+        controller.btn_play.hover_color = (100, 255, 100) if can_play else GRAY
+        controller.btn_play.draw(self.screen)
+        controller.btn_quit.draw(self.screen)
 
-        # Play Button
-        btn_play_rect = pygame.Rect(center_x - 100, 400, 200, 60)
-        btn_play_color = GREEN if can_play else GRAY
-        pygame.draw.rect(self.screen, btn_play_color, btn_play_rect, border_radius=10)
-        txt_play = self.fonts['btn'].render("JOUER", True, WHITE)
-        self.screen.blit(txt_play, (btn_play_rect.centerx - txt_play.get_width() // 2, btn_play_rect.centery - txt_play.get_height() // 2))
-
-        # Quit Button
-        btn_quit_rect = pygame.Rect(center_x - 100, 500, 200, 60)
-        pygame.draw.rect(self.screen, RED, btn_quit_rect, border_radius=10)
-        txt_quit = self.fonts['btn'].render("QUITTER", True, WHITE)
-        self.screen.blit(txt_quit, (btn_quit_rect.centerx - txt_quit.get_width() // 2, btn_quit_rect.centery - txt_quit.get_height() // 2))
-
-    def draw_game_over(self, board, winner_by_resign, mutual_draw):
+    def draw_game_over(self, controller):
         overlay = pygame.Surface((self.width + self.sidebar_width, self.height))
         overlay.set_alpha(200)
         overlay.fill((0, 0, 0))
@@ -151,94 +146,93 @@ class Renderer:
         text_str = "MATCH NUL"
         subtext_str = "Partie terminée"
         
-        if winner_by_resign:
-            winner = "NOIRS" if winner_by_resign == 'n' else "BLANCS"
+        if controller.winner_by_resign:
+            winner = "NOIRS" if controller.winner_by_resign == 'n' else "BLANCS"
             text_str = "VICTOIRE PAR ABANDON"
             subtext_str = f"Les {winner} gagnent !"
-        elif mutual_draw:
+        elif controller.winner_by_timeout:
+            winner = "NOIRS" if controller.winner_by_timeout == 'n' else "BLANCS"
+            text_str = "TEMPS ÉCOULÉ"
+            subtext_str = f"Les {winner} gagnent !"
+        elif controller.mutual_draw:
             subtext_str = "Par accord mutuel"
-        elif board.is_checkmate(board.turn):
-            winner = "NOIRS" if board.turn == 'b' else "BLANCS"
+        elif controller.board.is_checkmate(controller.board.turn):
+            winner = "NOIRS" if controller.board.turn == 'b' else "BLANCS"
             text_str = "ECHEC ET MAT !"
             subtext_str = f"Victoire des {winner}"
-        elif board.is_stalemate(board.turn):
+        elif controller.board.is_stalemate(controller.board.turn):
             subtext_str = "Par Pat (Stalemate)"
-        elif board.is_fifty_move_rule():
+        elif controller.board.is_fifty_move_rule():
             subtext_str = "Règle des 50 coups"
-        elif board.is_threefold_repetition():
+        elif controller.board.is_threefold_repetition():
             subtext_str = "Triple répétition"
-        elif board.is_insufficient_material():
+        elif controller.board.is_insufficient_material():
             subtext_str = "Manque de matériel"
         
         text = font_lg.render(text_str, True, WHITE)
-        subtext = font_lg.render(subtext_str, True, (255, 215, 0) if "Victoire" in text_str or winner_by_resign else (200, 200, 200))
+        subtext = font_lg.render(subtext_str, True, (255, 215, 0) if "Victoire" in text_str or controller.winner_by_resign or controller.winner_by_timeout else (200, 200, 200))
         
         total_w = self.width + self.sidebar_width
         self.screen.blit(text, (total_w // 2 - text.get_width() // 2, self.height // 2 - 150))
         self.screen.blit(subtext, (total_w // 2 - subtext.get_width() // 2, self.height // 2 - 50))
 
-        # Replay/Menu Buttons
-        btn_replay_rect = pygame.Rect(total_w // 2 - 210, self.height // 2 + 80, 200, 50)
-        pygame.draw.rect(self.screen, GREEN, btn_replay_rect, border_radius=5)
-        txt_replay = self.fonts['btn'].render("Rejouer", True, WHITE)
-        self.screen.blit(txt_replay, (btn_replay_rect.centerx - txt_replay.get_width() // 2, btn_replay_rect.centery - txt_replay.get_height() // 2))
+        controller.btn_replay.draw(self.screen)
+        controller.btn_back_menu.draw(self.screen)
 
-        btn_back_menu_rect = pygame.Rect(total_w // 2 + 10, self.height // 2 + 80, 200, 50)
-        pygame.draw.rect(self.screen, (100, 100, 150), btn_back_menu_rect, border_radius=5)
-        txt_back = self.fonts['btn'].render("Menu Principal", True, WHITE)
-        self.screen.blit(txt_back, (btn_back_menu_rect.centerx - txt_back.get_width() // 2, btn_back_menu_rect.centery - txt_back.get_height() // 2))
-
-    def draw_sidebar(self, player1_name, player2_name, score_p1, score_p2, p1_is_white, auto_rotate, draw_offered_by):
+    def draw_sidebar(self, controller):
         pygame.draw.rect(self.screen, DARK_GRAY, (self.width, 0, self.sidebar_width, self.height))
         pygame.draw.line(self.screen, BLACK, (self.width, 0), (self.width, self.height), 2)
 
-        self.draw_player_controls('n', 0, player1_name, player2_name, score_p1, score_p2, p1_is_white, draw_offered_by)
-        self.draw_player_controls('b', self.height // 2, player1_name, player2_name, score_p1, score_p2, p1_is_white, draw_offered_by)
+        self.draw_player_controls('n', 0, controller)
+        self.draw_player_controls('b', self.height // 2, controller)
         
-        btn_rotate_rect = pygame.Rect(self.width + 25, self.height - 60, 200, 40)
-        color_rotate = GREEN if auto_rotate else GRAY
-        pygame.draw.rect(self.screen, color_rotate, btn_rotate_rect, border_radius=5)
-        txt_rotate = self.fonts['small'].render("Rotation Auto : ON" if auto_rotate else "Rotation Auto : OFF", True, WHITE)
-        self.screen.blit(txt_rotate, (btn_rotate_rect.centerx - txt_rotate.get_width() // 2, btn_rotate_rect.centery - txt_rotate.get_height() // 2))
+        controller.btn_rotate.draw(self.screen)
 
-    def draw_player_controls(self, color, y_offset, player1_name, player2_name, score_p1, score_p2, p1_is_white, draw_offered_by):
+    def draw_player_controls(self, color, y_offset, controller):
+        p1_is_white = controller.p1_is_white
+        time_p1, time_p2 = controller.time_p1, controller.time_p2
+        draw_offered_by = controller.draw_offered_by
+        
         if color == 'b':
-            name = player1_name if p1_is_white else player2_name
-            score = score_p1 if p1_is_white else score_p2
+            name = controller.player1_name if p1_is_white else controller.player2_name
+            score = controller.score_p1 if p1_is_white else controller.score_p2
+            time_ms = time_p1 if p1_is_white else time_p2
         else:
-            name = player2_name if p1_is_white else player1_name
-            score = score_p2 if p1_is_white else score_p1
+            name = controller.player2_name if p1_is_white else controller.player1_name
+            score = controller.score_p2 if p1_is_white else controller.score_p1
+            time_ms = time_p2 if p1_is_white else time_p1
+
+        # Affichage du temps
+        if time_ms is not None:
+            seconds = max(0, int(time_ms // 1000))
+            minutes = seconds // 60
+            seconds %= 60
+            time_str = f"{minutes:02}:{seconds:02}"
+            time_color = RED if time_ms < 10000 else WHITE
+            txt_time = self.fonts['title'].render(time_str, True, time_color)
+            txt_time = pygame.transform.scale(txt_time, (int(txt_time.get_width() * 0.5), int(txt_time.get_height() * 0.5)))
+            self.screen.blit(txt_time, (self.width + (self.sidebar_width - txt_time.get_width()) // 2, y_offset + 10))
+            y_name_offset = 55
+        else:
+            y_name_offset = 20
 
         display_text = f"{name} ({score})"
         title = self.fonts['btn'].render(display_text, True, WHITE)
-        self.screen.blit(title, (self.width + (self.sidebar_width - title.get_width()) // 2, y_offset + 20))
+        self.screen.blit(title, (self.width + (self.sidebar_width - title.get_width()) // 2, y_offset + y_name_offset))
 
-        btn_resign_rect = pygame.Rect(self.width + 25, y_offset + 70, 200, 45)
-        pygame.draw.rect(self.screen, RED, btn_resign_rect, border_radius=5)
-        txt_resign = self.fonts['btn'].render("Abandonner", True, WHITE)
-        self.screen.blit(txt_resign, (btn_resign_rect.centerx - txt_resign.get_width() // 2, btn_resign_rect.centery - txt_resign.get_height() // 2))
+        # Drawing buttons (using standard Button objects defined dynamically for now to match logic)
+        btn_resign = Button((self.width + 25, y_offset + y_name_offset + 50, 200, 45), RED, "Abandonner", self.fonts['btn'])
+        btn_resign.draw(self.screen)
 
-        btn_draw_rect = pygame.Rect(self.width + 25, y_offset + 130, 200, 45)
-        
         if draw_offered_by == color:
-            pygame.draw.rect(self.screen, GRAY, btn_draw_rect, border_radius=5)
-            txt_draw = self.fonts['small'].render("Nulle proposée...", True, WHITE)
-            self.screen.blit(txt_draw, (btn_draw_rect.centerx - txt_draw.get_width() // 2, btn_draw_rect.centery - txt_draw.get_height() // 2))
+            # Button is "disabled" or shows status
+            btn_pending = Button((self.width + 25, y_offset + y_name_offset + 110, 200, 45), GRAY, "Nulle proposée...", self.fonts['small'])
+            btn_pending.draw(self.screen)
         elif draw_offered_by is not None:
-            btn_accept_rect = pygame.Rect(self.width + 25, y_offset + 130, 95, 45)
-            pygame.draw.rect(self.screen, GREEN, btn_accept_rect, border_radius=5)
-            txt_accept = self.fonts['small'].render("Accepter", True, WHITE)
-            txt_accept2 = self.fonts['small'].render("Nulle", True, WHITE)
-            self.screen.blit(txt_accept, (btn_accept_rect.centerx - txt_accept.get_width() // 2, btn_accept_rect.centery - 12))
-            self.screen.blit(txt_accept2, (btn_accept_rect.centerx - txt_accept2.get_width() // 2, btn_accept_rect.centery + 2))
-            
-            btn_refuse_rect = pygame.Rect(self.width + 130, y_offset + 130, 95, 45)
-            pygame.draw.rect(self.screen, RED, btn_refuse_rect, border_radius=5)
-            txt_refuse = self.fonts['small'].render("Refuser", True, WHITE)
-            txt_refuse2 = self.fonts['small'].render("Nulle", True, WHITE)
-            self.screen.blit(txt_refuse, (btn_refuse_rect.centerx - txt_refuse.get_width() // 2, btn_refuse_rect.centery - 12))
-            self.screen.blit(txt_refuse2, (btn_refuse_rect.centerx - txt_refuse2.get_width() // 2, btn_refuse_rect.centery + 2))
+            btn_accept = Button((self.width + 25, y_offset + y_name_offset + 110, 95, 45), GREEN, "Accepter", self.fonts['small'])
+            btn_refuse = Button((self.width + 130, y_offset + y_name_offset + 110, 95, 45), RED, "Refuser", self.fonts['small'])
+            btn_accept.draw(self.screen)
+            btn_refuse.draw(self.screen)
         else:
-            pygame.draw.rect(self.screen, (100, 100, 150), btn_draw_rect, border_radius=5)
-            txt_draw = self.fonts['btn'].render("Proposer Nulle", True, WHITE)
-            self.screen.blit(txt_draw, (btn_draw_rect.centerx - txt_draw.get_width() // 2, btn_draw_rect.centery - txt_draw.get_height() // 2))
+            btn_draw = Button((self.width + 25, y_offset + y_name_offset + 110, 200, 45), (100, 100, 150), "Proposer Nulle", self.fonts['btn'])
+            btn_draw.draw(self.screen)

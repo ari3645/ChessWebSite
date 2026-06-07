@@ -281,6 +281,9 @@ class Board:
         r1, c1 = start
         r2, c2 = end
         if r1 != r2 or abs(c1 - c2) != 2: return False
+        
+        # Castling is only possible from the initial King position
+        if c1 != 4: return False
         if self.moved_status.get((r1, 4)): return False
         
         # Le roi ne peut pas roquer s'il est en échec
@@ -290,13 +293,13 @@ class Board:
             if self.moved_status.get((r1, 7)): return False
             if self.get_piece(r1, 5) != "" or self.get_piece(r1, 6) != "": return False
             # Le roi ne peut pas traverser une case contrôlée
-            if self.leaves_king_in_check((r1, 4), (r1, 5)): return False
+            if self.leaves_king_in_check((r1, c1), (r1, 5)): return False
             return True
         if c2 == 2: # Grand roque
             if self.moved_status.get((r1, 0)): return False
             if self.get_piece(r1, 1) != "" or self.get_piece(r1, 2) != "" or self.get_piece(r1, 3) != "": return False
             # Le roi ne peut pas traverser une case contrôlée
-            if self.leaves_king_in_check((r1, 4), (r1, 3)): return False
+            if self.leaves_king_in_check((r1, c1), (r1, 3)): return False
             return True
         return False
 
