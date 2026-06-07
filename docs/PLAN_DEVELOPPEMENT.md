@@ -3,16 +3,20 @@
 Ce document suit l'évolution du projet de jeu d'échecs.
 
 ## 📌 Objectif
-Créer un jeu d'échecs fonctionnel pour deux joueurs en local utilisant la bibliothèque Pygame.
+Créer un jeu d'échecs fonctionnel pour deux joueurs en local utilisant la bibliothèque Pygame, avec une architecture modulaire et propre.
 
 ---
 
 ## 📅 Étapes du Projet
 
-### 🟦 Étape 1 : Refactorisation et Structure (Terminée)
+### 🟦 Étape 1 : Architecture et Structure (Terminée)
 - [x] Créer une structure de données propre pour le plateau (matrice 8x8).
 - [x] Centraliser le chargement des images.
-- [x] Créer une fonction de rendu (render) qui dessine le plateau et les pièces à partir de l'état du jeu.
+- [x] **Refactorisation Modulaire (MVC)** :
+    - [x] `board.py` : Logique pure des échecs (Modèle).
+    - [x] `renderer.py` : Gestion complète de l'affichage Pygame (Vue).
+    - [x] `game_controller.py` : Gestion des événements et du flux de jeu (Contrôleur).
+    - [x] `main.py` : Point d'entrée épuré.
 
 ### 🟦 Étape 2 : Interaction Joueur (Terminée)
 - [x] Implémenter la sélection d'une pièce au clic.
@@ -35,12 +39,12 @@ Créer un jeu d'échecs fonctionnel pour deux joueurs en local utilisant la bibl
 
 ### 🟦 Étape 5 : Coups Spéciaux & Fin de match (Terminée)
 - [x] Le Roque (Coup spécial Roi + Tour).
-- [x] Promotion du pion (Transformer le pion arrivé au bout).
+- [x] Promotion du pion (Interface graphique de choix).
 - [x] Détection de l'échec.
 - [x] Prise en passant.
 - [x] Échec et Mat.
 - [x] Abandonner (Bouton pour déclarer forfait).
-- [x] Fin de partie (Affichage du vainqueur).
+- [x] Fin de partie (Affichage du vainqueur et scores).
 
 ### 🟦 Étape 6 : Gestion des Parties Nulles (Draws) (Terminée)
 - [x] Le Pat (Stalemate).
@@ -48,7 +52,18 @@ Créer un jeu d'échecs fonctionnel pour deux joueurs en local utilisant la bibl
 - [x] Triple répétition de la position.
 - [x] Manque de matériel (Impossibilité de mater).
 - [x] Accord mutuel (Proposition/Acceptation de nulle).
-- [ ] (Optionnel) Manque de temps contre manque de matériel.
+
+### 🟦 Étape 7 : Polissage et Améliorations (À venir)
+- [ ] Ajouter des effets sonores (déplacement, capture, échec).
+- [ ] Système de chronomètre (Timer Blitz/Rapid).
+- [ ] Historique des coups (notation algébrique standard).
+- [ ] Menu de paramètres (choix des thèmes de couleurs et de l'apparence des pièces).
+- [ ] (Optionnel) Sauvegarde et chargement de partie.
+
+---
+
+**Stack Technique :**
+- **Langage :** Python 3.x
 - **Bibliothèque :** Pygame
-- **Dimensions :** Grille 8x8, cases de 118px.
+- **Architecture :** Modulaire / MVC
 - **Images :** Dossier `./Image/`

@@ -1,4 +1,4 @@
-from constants import INITIAL_BOARD, ROWS, COLS
+from src.constants import INITIAL_BOARD, ROWS, COLS
 
 class Board:
     def __init__(self):
@@ -11,6 +11,7 @@ class Board:
         self.en_passant_target = None
         self.half_move_clock = 0
         self.position_history = {} # Stocke l'empreinte de la position et son occurrence
+        self.position_history[self.get_position_signature()] = 1
 
     def get_position_signature(self):
         """Crée une signature unique pour la position actuelle (plateau + tour + roque + en passant)."""
@@ -244,11 +245,12 @@ class Board:
             if start_pos in self.moved_status:
                 self.moved_status[start_pos] = True
             
+            self.turn = 'n' if self.turn == 'b' else 'b'
+
             # Enregistrement de la position dans l'historique (pour triple répétition)
             sig = self.get_position_signature()
             self.position_history[sig] = self.position_history.get(sig, 0) + 1
             
-            self.turn = 'n' if self.turn == 'b' else 'b'
             return True
         return False
 
@@ -280,13 +282,21 @@ class Board:
         r2, c2 = end
         if r1 != r2 or abs(c1 - c2) != 2: return False
         if self.moved_status.get((r1, 4)): return False
-        if c2 == 6:
+        
+        # Le roi ne peut pas roquer s'il est en échec
+        if self.is_in_check(color): return False
+
+        if c2 == 6: # Petit roque
             if self.moved_status.get((r1, 7)): return False
             if self.get_piece(r1, 5) != "" or self.get_piece(r1, 6) != "": return False
+            # Le roi ne peut pas traverser une case contrôlée
+            if self.leaves_king_in_check((r1, 4), (r1, 5)): return False
             return True
-        if c2 == 2:
+        if c2 == 2: # Grand roque
             if self.moved_status.get((r1, 0)): return False
             if self.get_piece(r1, 1) != "" or self.get_piece(r1, 2) != "" or self.get_piece(r1, 3) != "": return False
+            # Le roi ne peut pas traverser une case contrôlée
+            if self.leaves_king_in_check((r1, 4), (r1, 3)): return False
             return True
         return False
 
