@@ -4,6 +4,7 @@ from src.constants import ROWS, COLS, PIECE_SCALE
 from src.board import Board
 from src.renderer import Renderer
 from src.ui import Button
+from src.sound_manager import SoundManager
 
 class GameController:
     def __init__(self):
@@ -32,6 +33,7 @@ class GameController:
             'small': pygame.font.SysFont('Arial', 18)
         }
         
+        self.sound_manager = SoundManager()
         self.renderer = Renderer(self.screen, self.square_size, self.sidebar_width, 
                                  self.piece_size, self.piece_offset, self.images, self.fonts)
         
@@ -197,12 +199,21 @@ class GameController:
             self.state = "MENU"
 
     def handle_promotion_click(self, pos):
-        menu_w = self.square_size * 4
+        # On ajuste la largeur pour inclure la croix (5 cases au lieu de 4)
+        menu_w = self.square_size * 5
         menu_x = (self.width - menu_w) // 2
         menu_y = (self.height - self.square_size) // 2
         
         if menu_x <= pos[0] < menu_x + menu_w and menu_y <= pos[1] < menu_y + self.square_size:
             idx = (pos[0] - menu_x) // self.square_size
+            
+            # Si on clique sur la 5ème case (la croix), on annule
+            if idx == 4:
+                self.waiting_for_promotion = None
+                self.selected_sq = None
+                self.valid_moves = []
+                return
+
             options = ['d', 't', 'f', 'c']
             choice = options[idx]
             
@@ -210,14 +221,21 @@ class GameController:
             # Avant le coup, on note qui joue pour l'incrément
             p1_played = (self.board.turn == 'b' and self.p1_is_white) or (self.board.turn == 'n' and not self.p1_is_white)
             
-            if self.board.move_piece(start_sq, end_sq, choice):
+            move_info = self.board.move_piece(start_sq, end_sq, choice)
+            if move_info:
+                # Sons
+                if move_info['checkmate']: self.sound_manager.play('game_over')
+                elif move_info['check']: self.sound_manager.play('check')
+                elif move_info['capture']: self.sound_manager.play('capture')
+                else: self.sound_manager.play('move') # On utilise 'move' ici pour éviter le son de victoire/notif
+
                 # Incrément
                 if self.time_p1 is not None:
                     if p1_played: self.time_p1 += self.increment * 1000
                     else: self.time_p2 += self.increment * 1000
 
-                if self.board.is_checkmate(self.board.turn) or \
-                   self.board.is_stalemate(self.board.turn) or \
+                if move_info['checkmate'] or \
+                   move_info['stalemate'] or \
                    self.board.is_fifty_move_rule() or \
                    self.board.is_threefold_repetition() or \
                    self.board.is_insufficient_material():
@@ -260,7 +278,15 @@ class GameController:
                 # Avant le coup, on note qui joue pour l'incrément
                 p1_played = (self.board.turn == 'b' and self.p1_is_white) or (self.board.turn == 'n' and not self.p1_is_white)
 
-                if self.board.move_piece(self.selected_sq, (row, col)):
+                move_info = self.board.move_piece(self.selected_sq, (row, col))
+                if move_info:
+                    # Sons
+                    if move_info['checkmate']: self.sound_manager.play('game_over')
+                    elif move_info['check']: self.sound_manager.play('check')
+                    elif move_info['castle']: self.sound_manager.play('castle')
+                    elif move_info['capture']: self.sound_manager.play('capture')
+                    else: self.sound_manager.play('move')
+
                     # Incrément
                     if self.time_p1 is not None:
                         if p1_played: self.time_p1 += self.increment * 1000
@@ -270,8 +296,8 @@ class GameController:
                     self.valid_moves = []
                     self.draw_offered_by = None
                     
-                    if self.board.is_checkmate(self.board.turn) or \
-                       self.board.is_stalemate(self.board.turn) or \
+                    if move_info['checkmate'] or \
+                       move_info['stalemate'] or \
                        self.board.is_fifty_move_rule() or \
                        self.board.is_threefold_repetition() or \
                        self.board.is_insufficient_material():

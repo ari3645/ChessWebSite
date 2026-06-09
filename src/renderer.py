@@ -77,7 +77,8 @@ class Renderer:
         overlay.fill((0, 0, 0))
         self.screen.blit(overlay, (0, 0))
         
-        menu_w, menu_h = self.square_size * 4, self.square_size
+        # On ajoute une option pour annuler (la croix)
+        menu_w, menu_h = self.square_size * 5, self.square_size
         menu_x = (self.width - menu_w) // 2
         menu_y = (self.height - menu_h) // 2
         
@@ -91,6 +92,11 @@ class Renderer:
             x = menu_x + i * self.square_size + self.piece_offset
             y = menu_y + self.piece_offset
             self.screen.blit(piece_img, (x, y))
+            
+        # Dessin de la croix d'annulation
+        cross_x = menu_x + 4 * self.square_size
+        pygame.draw.line(self.screen, RED, (cross_x + 20, menu_y + 20), (cross_x + self.square_size - 20, menu_y + self.square_size - 20), 5)
+        pygame.draw.line(self.screen, RED, (cross_x + self.square_size - 20, menu_y + 20), (cross_x + 20, menu_y + self.square_size - 20), 5)
 
     def draw_menu(self, controller, can_play):
         self.screen.fill(DARK_GRAY)

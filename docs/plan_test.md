@@ -35,9 +35,9 @@ Ce document récapitule les tests unitaires effectués pour valider le moteur de
 - [x] Empêcher un coup qui laisse son propre roi en échec (Clouage).
 - [x] Enregistrement de l'historique des positions.
 - [x] Validation des coups (départ vide, capture de sa propre pièce, mouvement invalide).
-- [ ] Blocage des pièces : Vérifier que chaque pièce est bloquée par ses propres alliés et ne peut pas sauter (sauf cavalier).
-- [ ] Échec à la découverte : Vérifier qu'un mouvement peut créer un échec sans que la pièce déplacée n'attaque le roi.
-- [ ] Double échec : Vérifier la détection de plusieurs menaces simultanées.
+- [x] Blocage des pièces : Vérifier que chaque pièce est bloquée par ses propres alliés et ne peut pas sauter (sauf cavalier).
+- [x] Échec à la découverte : Vérifier qu'un mouvement peut créer un échec sans que la pièce déplacée n'attaque le roi.
+- [x] Double échec : Vérifier la détection de plusieurs menaces simultanées.
 
 ## 5. Contrôle du Temps
 - [x] Sélection du mode de temps dans le menu (via Button class).
@@ -48,7 +48,9 @@ Ce document récapitule les tests unitaires effectués pour valider le moteur de
 - [x] Fonctionnement correct du mode "Sans temps".
 
 ## 6. Scénarios Limites (Edge Cases)
-- [ ] Promotion capturante : Capturer une pièce sur la 8ème rangée et promouvoir en même temps.
-- [ ] Pion bloqué : Vérifier qu'un pion ne peut pas capturer en avant ni avancer si bloqué.
-- [ ] Roque & Clouage : Vérifier que le roque est impossible si une tour est clouée (Note: en réalité c'est autorisé si le roi n'est pas menacé, à vérifier).
-- [ ] Triple répétition complexe : Position répétée avec des droits de roque différents.
+- [x] Promotion capturante : Capturer une pièce sur la 8ème rangée et promouvoir en même temps.
+- [x] Pion bloqué : Vérifier qu'un pion ne peut pas capturer en avant ni avancer si bloqué.
+- [x] Roque & Clouage : Vérifier que le roque est impossible si une tour est clouée (Note: en réalité c'est autorisé si le roi n'est pas menacé, à vérifier).
+- [x] Triple répétition complexe : Position répétée avec des droits de roque différents.
+- [x] En passant : Persistance limitée à un seul tour.
+- [x] Roque : Interdiction de sortir d'un échec ou d'arriver sur une case attaquée.

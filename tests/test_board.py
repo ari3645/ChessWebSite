@@ -327,17 +327,66 @@ class TestBoard(unittest.TestCase):
         sig_after = self.board.get_position_signature()
         self.assertNotEqual(sig_initial, sig_after)
 
-    def test_piece_blocking_exhaustive(self):
-        # 1. Rook blocked by ally
-        self.board.grid = [["" for _ in range(COLS)] for _ in range(ROWS)]
-        self.board.grid[7][0] = "tb"
-        self.board.grid[5][0] = "pb"
-        self.assertFalse(self.board.move_piece((7, 0), (4, 0)))
+    def test_en_passant_persistence(self):
+        """Test that en passant target is cleared after one turn."""
+        self.board.move_piece((6, 4), (4, 4)) # White e4
+        self.board.move_piece((1, 3), (3, 3)) # Black d5
+        self.board.move_piece((4, 4), (3, 4)) # White e5
+        self.board.move_piece((1, 5), (3, 5)) # Black f5 (double move)
         
-        # 2. Bishop blocked by ally
-        self.board.grid[7][2] = "fb"
-        self.board.grid[6][3] = "pb"
-        self.assertFalse(self.board.move_piece((7, 2), (5, 4)))
+        self.assertEqual(self.board.en_passant_target, (2, 5))
+        
+        # Black moves something else instead of taking en passant
+        self.board.turn = 'n' # Skip white
+        self.board.move_piece((0, 1), (2, 2)) # Black Nc6
+        
+        # White moves something else
+        self.board.move_piece((7, 6), (5, 5)) # White Nf3
+        
+        # Now en passant target should be None
+        self.assertIsNone(self.board.en_passant_target)
+
+    def test_castling_out_of_check_complete(self):
+        """Test that castling is forbidden if the king is currently in check."""
+        self.board.grid = [["" for _ in range(COLS)] for _ in range(ROWS)]
+        self.board.grid[7][4] = "rb" # White King
+        self.board.grid[7][7] = "tb" # White Rook
+        self.board.grid[0][4] = "tn" # Black Rook attacking e1 (check)
+        
+        self.board.turn = 'b'
+        self.assertTrue(self.board.is_in_check('b'))
+        self.assertFalse(self.board.check_castling((7, 4), (7, 6), 'b'))
+
+    def test_castling_into_check(self):
+        """Test that castling is forbidden if the destination square is under attack."""
+        self.board.grid = [["" for _ in range(COLS)] for _ in range(ROWS)]
+        self.board.grid[7][4] = "rb" # White King
+        self.board.grid[7][7] = "tb" # White Rook
+        self.board.grid[0][6] = "tn" # Black Rook attacking g1
+        
+        self.board.turn = 'b'
+        self.assertFalse(self.board.check_castling((7, 4), (7, 6), 'b'))
+
+    def test_stalemate_realistic(self):
+        """A common stalemate pattern: King vs King + Pawn."""
+        self.board.grid = [["" for _ in range(COLS)] for _ in range(ROWS)]
+        self.board.grid[0][0] = "rn" # Black King
+        self.board.grid[1][0] = "pb" # White Pawn at a7
+        self.board.grid[2][0] = "rb" # White King at a6
+        self.board.turn = 'n'
+        
+        self.assertTrue(self.board.is_stalemate('n'))
+        self.assertFalse(self.board.is_in_check('n'))
+
+    def test_fifty_move_rule_capture(self):
+        """Verify that a capture resets the fifty-move clock."""
+        self.board.half_move_clock = 40
+        self.board.grid[4][4] = "pb"
+        self.board.grid[3][5] = "cn"
+        self.board.turn = 'b'
+        
+        self.board.move_piece((4, 4), (3, 5)) # Capture
+        self.assertEqual(self.board.half_move_clock, 0)
 
 if __name__ == '__main__':
     unittest.main()

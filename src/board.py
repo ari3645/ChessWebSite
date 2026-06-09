@@ -195,13 +195,24 @@ class Board:
         return False
 
     def move_piece(self, start_pos, end_pos, promotion_choice='d'):
-        """Déplace une pièce, gère les coups spéciaux et change de tour."""
+        """Déplace une pièce, gère les coups spéciaux et change de tour. Retourne un dict avec les détails du coup."""
         if self.is_valid_move(start_pos, end_pos) and not self.leaves_king_in_check(start_pos, end_pos):
             start_row, start_col = start_pos
             end_row, end_col = end_pos
             piece = self.grid[start_row][start_col]
             target = self.grid[end_row][end_col]
             
+            move_info = {
+                'success': True,
+                'capture': target != "",
+                'castle': False,
+                'promotion': False,
+                'en_passant': False,
+                'check': False,
+                'checkmate': False,
+                'stalemate': False
+            }
+
             # Gestion du half_move_clock (Règle des 50 coups)
             if piece[0] == 'p' or target != "":
                 self.half_move_clock = 0
@@ -212,6 +223,7 @@ class Board:
 
             # Roque
             if piece[0] == 'r' and abs(start_col - end_col) == 2:
+                move_info['castle'] = True
                 if end_col > start_col:
                     rook = self.grid[start_row][7]
                     self.grid[start_row][5] = rook
@@ -223,6 +235,8 @@ class Board:
 
             # En Passant
             if piece[0] == 'p' and (end_row, end_col) == self.en_passant_target:
+                move_info['capture'] = True
+                move_info['en_passant'] = True
                 direction = -1 if piece[1] == 'b' else 1
                 self.grid[end_row - direction][end_col] = ""
             
@@ -237,6 +251,7 @@ class Board:
             # Promotion
             if piece[0] == 'p':
                 if (piece[1] == 'b' and end_row == 0) or (piece[1] == 'n' and end_row == 7):
+                    move_info['promotion'] = True
                     if promotion_choice not in ['d', 't', 'f', 'c']: promotion_choice = 'd'
                     self.grid[end_row][end_col] = promotion_choice + piece[1]
 
@@ -247,12 +262,20 @@ class Board:
             
             self.turn = 'n' if self.turn == 'b' else 'b'
 
+            # Vérification échec / mat après changement de tour
+            if self.is_in_check(self.turn):
+                move_info['check'] = True
+                if self.is_checkmate(self.turn):
+                    move_info['checkmate'] = True
+            elif self.is_stalemate(self.turn):
+                move_info['stalemate'] = True
+
             # Enregistrement de la position dans l'historique (pour triple répétition)
             sig = self.get_position_signature()
             self.position_history[sig] = self.position_history.get(sig, 0) + 1
             
-            return True
-        return False
+            return move_info
+        return None
 
     def is_valid_move(self, start_pos, end_pos):
         start_row, start_col = start_pos

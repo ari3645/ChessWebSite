@@ -58,9 +58,10 @@ Créer un jeu d'échecs fonctionnel pour deux joueurs en local utilisant la bibl
 - [x] Système de chronomètre (Timer Blitz/Rapid/Bullet) avec incréments.
 - [x] Refonte de l'interface avec une classe Button (Hitboxes fiables, effets hover).
 - [x] Nouveau design horizontal pour le menu principal.
-- [ ] Ajouter des effets sonores (déplacement, capture, échec).
+- [x] Ajouter des effets sonores (déplacement, capture, échec).
 - [ ] Historique des coups (notation algébrique standard).
 - [ ] Menu de paramètres (choix des thèmes de couleurs et de l'apparence des pièces).
+- [ ] (Amélioration) Différencier les sons de promotion (capture vs simple mouvement).
 - [ ] (Optionnel) Sauvegarde et chargement de partie.
 
 ---
