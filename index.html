@@ -97,6 +97,12 @@
                         <div class="timer-display opponent-timer" id="opp-timer">--:--</div>
                     </div>
 
+                    <!-- Bannière d'historique -->
+                    <div id="history-banner" class="history-banner">
+                        <span class="history-banner-text">Vous visualisez un coup précédent</span>
+                        <button id="btn-return-live" class="btn-xs" title="Retourner au coup le plus récent de la partie active">Retour au direct</button>
+                    </div>
+
                     <!-- L'échiquier physique -->
                     <div class="board-container">
                         <div id="board" class="chessboard">
@@ -129,6 +135,19 @@
                             <div class="move-history-list" id="move-history">
                                 <!-- Généré en JS -->
                                 <div class="empty-history">Aucun coup joué</div>
+                            </div>
+                            
+                            <!-- Boutons de navigation dans l'historique -->
+                            <div class="history-navigation">
+                                <button id="btn-hist-first" class="btn btn-secondary nav-btn" title="Premier coup" disabled>&laquo;</button>
+                                <button id="btn-hist-prev" class="btn btn-secondary nav-btn" title="Coup précédent" disabled>&lsaquo;</button>
+                                <button id="btn-hist-next" class="btn btn-secondary nav-btn" title="Coup suivant" disabled>&rsaquo;</button>
+                                <button id="btn-hist-last" class="btn btn-secondary nav-btn" title="Dernier coup" disabled>&raquo;</button>
+                            </div>
+
+                            <!-- Actions PGN -->
+                            <div class="pgn-actions">
+                                <button id="btn-export-pgn" class="btn btn-secondary btn-sm" title="Exporter au format PGN" disabled>Exporter PGN</button>
                             </div>
                         </div>
                     </div>

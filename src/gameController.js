@@ -156,6 +156,52 @@ export class GameController {
         document.getElementById('btn-cancel-promotion').addEventListener('click', () => {
             this.cancelPromotion();
         });
+
+        // Boutons de navigation d'historique
+        document.getElementById('btn-hist-first').addEventListener('click', () => {
+            this.navigateToMove(-1);
+        });
+        document.getElementById('btn-hist-prev').addEventListener('click', () => {
+            this.navigateToMove(this.currentHistoryIndex - 1);
+        });
+        document.getElementById('btn-hist-next').addEventListener('click', () => {
+            this.navigateToMove(this.currentHistoryIndex + 1);
+        });
+        document.getElementById('btn-hist-last').addEventListener('click', () => {
+            this.navigateToMove(this.moveHistory.length - 1);
+        });
+
+        // Bouton PGN
+        document.getElementById('btn-export-pgn').addEventListener('click', () => {
+            this.exportPGN();
+        });
+        document.getElementById('btn-return-live').addEventListener('click', () => {
+            if (this.moveHistory.length > 0) {
+                this.navigateToMove(this.moveHistory.length - 1);
+            }
+        });
+
+        // Navigation au clavier dans l'historique
+        document.addEventListener('keydown', (e) => {
+            if (this.state !== "PLAYING" && this.state !== "GAME_OVER") return;
+            const activeEl = document.activeElement;
+            if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
+                return;
+            }
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                this.navigateToMove(this.currentHistoryIndex - 1);
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                this.navigateToMove(this.currentHistoryIndex + 1);
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                this.navigateToMove(-1);
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                this.navigateToMove(this.moveHistory.length - 1);
+            }
+        });
     }
 
     startGame() {
@@ -163,7 +209,8 @@ export class GameController {
         this.selectedSq = null;
         this.validMoves = [];
         this.moveHistory = [];
-        
+        this.currentHistoryIndex = -1;
+
         // Initialiser les chronomètres
         if (this.selectedTimeLimit !== null) {
             this.timeP1 = this.selectedTimeLimit * 1000;
@@ -172,6 +219,17 @@ export class GameController {
             this.timeP1 = null;
             this.timeP2 = null;
         }
+
+        // Capturer l'état initial du plateau pour la navigation dans l'historique
+        this.initialBoardState = {
+            grid: this.board.grid.map(row => [...row]),
+            turn: this.board.turn,
+            movedStatus: {...this.board.movedStatus},
+            enPassantTarget: null,
+            isInCheck: false,
+            timeP1: this.timeP1,
+            timeP2: this.timeP2
+        };
         
         this.state = "PLAYING";
         this.lastTickTime = Date.now();
@@ -287,17 +345,51 @@ export class GameController {
 
     updateIndicators() {
         const turnDisplay = document.getElementById('turn-display');
-        const activeName = this.getActivePlayerName();
-        turnDisplay.textContent = `Trait aux ${this.board.turn === 'b' ? 'Blancs' : 'Noirs'} (${activeName})`;
         
-        // Activer la bordure lumineuse sur le chronomètre du joueur actif
-        const isBlackTurn = this.board.turn === 'n';
-        const shouldRotate = this.autoRotate && isBlackTurn;
+        const totalMoves = this.moveHistory.length;
+        const isLatest = this.currentHistoryIndex === totalMoves - 1;
+        
+        let activeTurn;
+        let activeName;
+        
+        if (totalMoves > 0 && !isLatest) {
+            // En cours de visualisation de l'historique
+            activeTurn = this.currentHistoryIndex === -1 
+                ? this.initialBoardState.turn 
+                : this.moveHistory[this.currentHistoryIndex].boardState.turn;
+            
+            activeName = activeTurn === 'b' 
+                ? (this.p1IsWhite ? this.player1Name : this.player2Name)
+                : (this.p1IsWhite ? this.player2Name : this.player1Name);
+            
+            const turnColor = activeTurn === 'b' ? 'Blancs' : 'Noirs';
+            turnDisplay.textContent = `[Historique] Trait aux ${turnColor} (${activeName})`;
+        } else {
+            // En direct
+            activeTurn = this.board.turn;
+            activeName = this.getActivePlayerName();
+            const turnColor = activeTurn === 'b' ? 'Blancs' : 'Noirs';
+            turnDisplay.textContent = `Trait aux ${turnColor} (${activeName})`;
+        }
+        
+        // La bordure lumineuse du chronomètre actif correspond :
+        // - au joueur actif du jeu en direct si la partie est en cours (pour indiquer à qui est le tour réel)
+        // - au joueur actif de l'état visualisé si la partie est terminée
+        let activeHighlightTurn;
+        if (this.state === "PLAYING") {
+            activeHighlightTurn = this.board.turn;
+        } else {
+            activeHighlightTurn = activeTurn;
+        }
+
+        const isBlackActive = activeHighlightTurn === 'n';
+        const liveIsBlack = this.board.turn === 'n';
+        const shouldRotate = this.autoRotate && liveIsBlack;
 
         const currTimerEl = document.getElementById('curr-timer');
         const oppTimerEl = document.getElementById('opp-timer');
 
-        if (isBlackTurn) {
+        if (isBlackActive) {
             if (shouldRotate) {
                 currTimerEl.classList.add('active');
                 oppTimerEl.classList.remove('active');
@@ -317,8 +409,8 @@ export class GameController {
     }
 
     renderTimers() {
-        const isBlackTurn = this.board.turn === 'n';
-        const shouldRotate = this.autoRotate && isBlackTurn;
+        const liveIsBlack = this.board.turn === 'n';
+        const shouldRotate = this.autoRotate && liveIsBlack;
 
         const currTimerEl = document.getElementById('curr-timer');
         const oppTimerEl = document.getElementById('opp-timer');
@@ -329,10 +421,27 @@ export class GameController {
             return;
         }
 
-        const whiteTime = this.p1IsWhite ? this.timeP1 : this.timeP2;
-        const blackTime = this.p1IsWhite ? this.timeP2 : this.timeP1;
+        // Si la partie est terminée, on affiche le temps restant à l'index historique sélectionné
+        let time1, time2;
+        const totalMoves = this.moveHistory.length;
+        const isLatest = this.currentHistoryIndex === totalMoves - 1;
+
+        if (this.state === "GAME_OVER" && totalMoves > 0 && !isLatest) {
+            const snapshot = this.currentHistoryIndex === -1 
+                ? this.initialBoardState 
+                : this.moveHistory[this.currentHistoryIndex].boardState;
+            time1 = snapshot.timeP1;
+            time2 = snapshot.timeP2;
+        } else {
+            time1 = this.timeP1;
+            time2 = this.timeP2;
+        }
+
+        const whiteTime = this.p1IsWhite ? time1 : time2;
+        const blackTime = this.p1IsWhite ? time2 : time1;
 
         const formatTime = (ms) => {
+            if (ms === null) return "--:--";
             const totalSec = Math.ceil(ms / 1000);
             const m = Math.floor(totalSec / 60);
             const s = totalSec % 60;
@@ -346,13 +455,13 @@ export class GameController {
         oppTimerEl.textContent = formatTime(tOpp);
 
         // Alerte temps faible (< 15 secondes)
-        if (tCurr < 15000) {
+        if (tCurr < 15000 && this.state === "PLAYING") {
             currTimerEl.classList.add('low-time');
         } else {
             currTimerEl.classList.remove('low-time');
         }
 
-        if (tOpp < 15000) {
+        if (tOpp < 15000 && this.state === "PLAYING") {
             oppTimerEl.classList.add('low-time');
         } else {
             oppTimerEl.classList.remove('low-time');
@@ -363,15 +472,32 @@ export class GameController {
         const boardEl = document.getElementById('board');
         boardEl.innerHTML = "";
 
-        const isBlackTurn = this.board.turn === 'n';
-        const shouldRotate = this.autoRotate && isBlackTurn;
+        // Déterminer quel état afficher
+        let grid, turn, isInCheckCurrent, lastMoveStart = null, lastMoveEnd = null;
+        
+        if (this.currentHistoryIndex === -1) {
+            grid = this.initialBoardState.grid;
+            turn = this.initialBoardState.turn;
+            isInCheckCurrent = false;
+        } else {
+            const histItem = this.moveHistory[this.currentHistoryIndex];
+            grid = histItem.boardState.grid;
+            turn = histItem.boardState.turn;
+            isInCheckCurrent = histItem.boardState.isInCheck;
+            lastMoveStart = histItem.start;
+            lastMoveEnd = histItem.end;
+        }
+
+        // Utiliser le tour actif du jeu en direct pour la rotation, évitant que l'échiquier ne tourne à chaque coup en lisant l'historique
+        const liveIsBlackTurn = this.board.turn === 'n';
+        const shouldRotate = this.autoRotate && liveIsBlackTurn;
 
         // Détection de la case du Roi en échec
         let checkSquare = null;
-        if (this.board.isInCheck(this.board.turn)) {
+        if (isInCheckCurrent) {
             for (let r = 0; r < ROWS; r++) {
                 for (let c = 0; c < COLS; c++) {
-                    if (this.board.grid[r][c] === `r${this.board.turn}`) {
+                    if (grid[r][c] === `r${turn}`) {
                         checkSquare = { r, c };
                         break;
                     }
@@ -380,16 +506,7 @@ export class GameController {
             }
         }
 
-        // Dernier coup joué à mettre en surbrillance
-        let lastMoveStart = null;
-        let lastMoveEnd = null;
-        if (this.moveHistory.length > 0) {
-            const lastMoveObj = this.moveHistory[this.moveHistory.length - 1];
-            if (lastMoveObj.start && lastMoveObj.end) {
-                lastMoveStart = lastMoveObj.start;
-                lastMoveEnd = lastMoveObj.end;
-            }
-        }
+        const isLatest = this.currentHistoryIndex === this.moveHistory.length - 1;
 
         // Parcours du plateau de jeu (inversé si rotation activée)
         for (let ri = 0; ri < ROWS; ri++) {
@@ -397,14 +514,14 @@ export class GameController {
                 const r = shouldRotate ? 7 - ri : ri;
                 const c = shouldRotate ? 7 - ci : ci;
 
-                const piece = this.board.grid[r][c];
+                const piece = grid[r][c];
                 const squareEl = document.createElement('div');
                 squareEl.className = `square ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
                 squareEl.dataset.row = r;
                 squareEl.dataset.col = c;
 
                 // Application des états de surbrillance
-                if (this.selectedSq && this.selectedSq.r === r && this.selectedSq.c === c) {
+                if (isLatest && this.selectedSq && this.selectedSq.r === r && this.selectedSq.c === c) {
                     squareEl.classList.add('selected');
                 }
 
@@ -421,35 +538,41 @@ export class GameController {
                 if (piece !== "") {
                     const pieceEl = document.createElement('div');
                     pieceEl.className = "piece";
-                    if (this.selectedSq && this.selectedSq.r === r && this.selectedSq.c === c) {
+                    if (isLatest && this.selectedSq && this.selectedSq.r === r && this.selectedSq.c === c) {
                         pieceEl.classList.add('selected-piece');
                     }
                     pieceEl.innerHTML = PIECE_SVGS[piece[0]](piece[1]);
                     squareEl.appendChild(pieceEl);
                 }
 
-                // Affichage des aides de mouvement
-                const isHint = this.validMoves.some(m => m.r === r && m.c === c);
-                if (isHint) {
-                    const hasPiece = piece !== "";
-                    const isEnPassant = this.board.enPassantTarget && 
-                                      r === this.board.enPassantTarget.r && 
-                                      c === this.board.enPassantTarget.c &&
-                                      this.board.grid[startPieceRow(this.selectedSq)][this.selectedSq.c][0] === 'p';
-                    
-                    if (hasPiece || isEnPassant) {
-                        const capHint = document.createElement('div');
-                        capHint.className = "capture-hint";
-                        squareEl.appendChild(capHint);
-                    } else {
-                        const moveHint = document.createElement('div');
-                        moveHint.className = "move-hint";
-                        squareEl.appendChild(moveHint);
+                // Affichage des aides de mouvement (uniquement sur le coup le plus récent)
+                if (isLatest) {
+                    const isHint = this.validMoves.some(m => m.r === r && m.c === c);
+                    if (isHint) {
+                        const hasPiece = piece !== "";
+                        const isEnPassant = this.board.enPassantTarget && 
+                                          r === this.board.enPassantTarget.r && 
+                                          c === this.board.enPassantTarget.c &&
+                                          this.board.grid[startPieceRow(this.selectedSq)][this.selectedSq.c][0] === 'p';
+                        
+                        if (hasPiece || isEnPassant) {
+                            const capHint = document.createElement('div');
+                            capHint.className = "capture-hint";
+                            squareEl.appendChild(capHint);
+                        } else {
+                            const moveHint = document.createElement('div');
+                            moveHint.className = "move-hint";
+                            squareEl.appendChild(moveHint);
+                        }
                     }
                 }
 
-                // Événement clic
-                squareEl.addEventListener('click', () => this.handleSquareClick(r, c));
+                // Événement clic (seulement si coup le plus récent et partie en cours)
+                squareEl.addEventListener('click', () => {
+                    if (this.currentHistoryIndex === this.moveHistory.length - 1) {
+                        this.handleSquareClick(r, c);
+                    }
+                });
 
                 boardEl.appendChild(squareEl);
             }
@@ -460,6 +583,10 @@ export class GameController {
 
     handleSquareClick(r, c) {
         if (this.state !== "PLAYING") return;
+
+        // Bloquer toute action sur l'échiquier si on parcourt l'historique
+        const isLatest = this.currentHistoryIndex === this.moveHistory.length - 1;
+        if (!isLatest) return;
 
         const piece = this.board.getPiece(r, c);
 
@@ -512,13 +639,37 @@ export class GameController {
         const moveInfo = this.board.movePiece(start, end, promotionChoice);
 
         if (moveInfo && moveInfo.success) {
+            // Gestion de l'incrément de temps (appliqué avant de prendre le snapshot)
+            if (this.selectedTimeLimit !== null && this.selectedIncrement > 0) {
+                const isP1JustPlayed = (this.board.turn === 'n' && this.p1IsWhite) || (this.board.turn === 'b' && !this.p1IsWhite);
+                if (isP1JustPlayed) {
+                    this.timeP1 += this.selectedIncrement * 1000;
+                } else {
+                    this.timeP2 += this.selectedIncrement * 1000;
+                }
+            }
+
+            // Créer un snapshot de l'état du plateau après le déplacement pour la navigation
+            const boardStateSnapshot = {
+                grid: this.board.grid.map(row => [...row]),
+                turn: this.board.turn,
+                movedStatus: {...this.board.movedStatus},
+                enPassantTarget: this.board.enPassantTarget ? {...this.board.enPassantTarget} : null,
+                isInCheck: this.board.isInCheck(this.board.turn),
+                timeP1: this.timeP1,
+                timeP2: this.timeP2
+            };
+
             // Enregistrer l'historique
             moveInfo.notation = notation;
             this.moveHistory.push({
                 notation: notation,
                 start: start,
-                end: end
+                end: end,
+                boardState: boardStateSnapshot
             });
+
+            this.currentHistoryIndex = this.moveHistory.length - 1;
 
             // Sons en fonction des actions
             if (moveInfo.checkmate) {
@@ -531,16 +682,6 @@ export class GameController {
                 this.soundManager.play('capture');
             } else {
                 this.soundManager.play('move');
-            }
-
-            // Gestion de l'incrément de temps
-            if (this.selectedTimeLimit !== null && this.selectedIncrement > 0) {
-                const isP1JustPlayed = (this.board.turn === 'n' && this.p1IsWhite) || (this.board.turn === 'b' && !this.p1IsWhite);
-                if (isP1JustPlayed) {
-                    this.timeP1 += this.selectedIncrement * 1000;
-                } else {
-                    this.timeP2 += this.selectedIncrement * 1000;
-                }
             }
 
             // Reset sélection
@@ -725,8 +866,12 @@ export class GameController {
 
         if (this.moveHistory.length === 0) {
             historyEl.innerHTML = `<div class="empty-history">Aucun coup joué</div>`;
+            this.updateNavigationButtons();
+            document.getElementById('btn-export-pgn').disabled = true;
             return;
         }
+
+        document.getElementById('btn-export-pgn').disabled = false;
 
         let rowEl = null;
         this.moveHistory.forEach((moveObj, index) => {
@@ -742,20 +887,35 @@ export class GameController {
 
                 const whiteMoveEl = document.createElement('span');
                 whiteMoveEl.className = "move-white";
+                if (this.currentHistoryIndex === index) {
+                    whiteMoveEl.classList.add('active-move');
+                }
                 whiteMoveEl.textContent = moveObj.notation;
+                whiteMoveEl.addEventListener('click', () => this.navigateToMove(index));
                 rowEl.appendChild(whiteMoveEl);
                 
                 historyEl.appendChild(rowEl);
             } else {
                 const blackMoveEl = document.createElement('span');
                 blackMoveEl.className = "move-black";
+                if (this.currentHistoryIndex === index) {
+                    blackMoveEl.classList.add('active-move');
+                }
                 blackMoveEl.textContent = moveObj.notation;
+                blackMoveEl.addEventListener('click', () => this.navigateToMove(index));
                 rowEl.appendChild(blackMoveEl);
             }
         });
 
-        // Scroll vers le bas automatiquement
-        historyEl.scrollTop = historyEl.scrollHeight;
+        // Scroll vers l'élément actif ou le bas
+        const activeEl = historyEl.querySelector('.active-move');
+        if (activeEl) {
+            activeEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        } else {
+            historyEl.scrollTop = historyEl.scrollHeight;
+        }
+
+        this.updateNavigationButtons();
     }
 
     endGame(winnerColor, reason) {
@@ -830,5 +990,113 @@ export class GameController {
         } else {
             return this.p1IsWhite ? this.player1Name : this.player2Name;
         }
+    }
+
+    navigateToMove(index) {
+        if (index < -1 || index >= this.moveHistory.length) return;
+        this.currentHistoryIndex = index;
+        this.renderBoard();
+        this.renderHistory();
+        this.updateIndicators();
+        this.renderTimers();
+    }
+
+    updateNavigationButtons() {
+        const btnFirst = document.getElementById('btn-hist-first');
+        const btnPrev = document.getElementById('btn-hist-prev');
+        const btnNext = document.getElementById('btn-hist-next');
+        const btnLast = document.getElementById('btn-hist-last');
+
+        const totalMoves = this.moveHistory.length;
+
+        if (totalMoves === 0) {
+            btnFirst.disabled = true;
+            btnPrev.disabled = true;
+            btnNext.disabled = true;
+            btnLast.disabled = true;
+        } else {
+            btnFirst.disabled = this.currentHistoryIndex === -1;
+            btnPrev.disabled = this.currentHistoryIndex === -1;
+            btnNext.disabled = this.currentHistoryIndex === totalMoves - 1;
+            btnLast.disabled = this.currentHistoryIndex === totalMoves - 1;
+        }
+
+        // Afficher ou masquer la bannière d'historique
+        const banner = document.getElementById('history-banner');
+        if (banner) {
+            const isLatest = this.currentHistoryIndex === totalMoves - 1;
+            if (!isLatest && totalMoves > 0) {
+                banner.classList.add('active');
+            } else {
+                banner.classList.remove('active');
+            }
+        }
+    }
+
+    translateFrenchToEnglish(notation) {
+        if (!notation) return "";
+        let english = notation;
+        
+        // 1. Traduire la pièce de départ si elle commence par une lettre de pièce française
+        const firstChar = english[0];
+        if (['T', 'C', 'F', 'D', 'R'].includes(firstChar)) {
+            const mapping = { 'T': 'R', 'C': 'N', 'F': 'B', 'D': 'Q', 'R': 'K' };
+            english = mapping[firstChar] + english.substring(1);
+        }
+        
+        // 2. Traduire la promotion (ex: e8=D -> e8=Q)
+        english = english.replace(/=([TCFDR])/g, (match, p1) => {
+            const mapping = { 'T': 'R', 'C': 'N', 'F': 'B', 'D': 'Q', 'R': 'K' };
+            return '=' + mapping[p1];
+        });
+        
+        return english;
+    }
+
+    exportPGN() {
+        if (this.moveHistory.length === 0) return;
+
+        const date = new Date();
+        const dateStr = `${date.getFullYear()}.${(date.getMonth() + 1).toString().padStart(2, '0')}.${date.getDate().toString().padStart(2, '0')}`;
+
+        let resultStr = "*";
+        if (this.state === "GAME_OVER") {
+            const titleEl = document.getElementById('game-over-title');
+            const resultEl = document.getElementById('game-over-result');
+            if (titleEl.textContent === "MATCH NUL") {
+                resultStr = "1/2-1/2";
+            } else if (resultEl.textContent.includes(this.player1Name)) {
+                resultStr = this.p1IsWhite ? "1-0" : "0-1";
+            } else {
+                resultStr = this.p1IsWhite ? "0-1" : "1-0";
+            }
+        }
+
+        let pgn = `[Event "Partie en local"]\n`;
+        pgn += `[Site "Localhost"]\n`;
+        pgn += `[Date "${dateStr}"]\n`;
+        pgn += `[Round "1"]\n`;
+        pgn += `[White "${this.p1IsWhite ? this.player1Name : this.player2Name}"]\n`;
+        pgn += `[Black "${this.p1IsWhite ? this.player2Name : this.player1Name}"]\n`;
+        pgn += `[Result "${resultStr}"]\n\n`;
+
+        let movesStr = "";
+        this.moveHistory.forEach((moveObj, index) => {
+            const englishNotation = this.translateFrenchToEnglish(moveObj.notation);
+            if (index % 2 === 0) {
+                movesStr += `${Math.floor(index / 2) + 1}. ${englishNotation} `;
+            } else {
+                movesStr += `${englishNotation} `;
+            }
+        });
+        pgn += movesStr.trim() + " " + resultStr;
+
+        // Copier dans le presse-papiers
+        navigator.clipboard.writeText(pgn).then(() => {
+            alert("Le fichier PGN a été copié dans le presse-papiers !");
+        }).catch(err => {
+            console.error("Erreur copie PGN: ", err);
+            alert("Impossible de copier automatiquement. Voici le PGN :\n\n" + pgn);
+        });
     }
 }

@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Runner - Jeu d'Échecs Moderne</title>
+    <!-- Google Fonts: Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-card: rgba(30, 41, 59, 0.7);
+            --border-glass: rgba(255, 255, 255, 0.08);
+            --text-main: #f8fafc;
+            --text-secondary: #94a3b8;
+            --color-success: #10b981;
+            --color-success-bg: rgba(16, 185, 129, 0.15);
+            --color-success-border: rgba(16, 185, 129, 0.3);
+            --color-error: #ef4444;
+            --color-error-bg: rgba(239, 68, 68, 0.15);
+            --color-error-border: rgba(239, 68, 68, 0.3);
+            --color-accent: #6366f1;
+            --color-accent-hover: #818cf8;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+            --shadow-main: 0 10px 30px rgba(0, 0, 0, 0.25);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 40px 20px;
+            background-image: radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
+                              radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.1) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.05rem;
+            font-weight: 400;
+        }
+
+        /* Dashboard de synthèse */
+        .summary-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            margin-bottom: 30px;
+            box-shadow: var(--shadow-main);
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .stat-box {
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        #stat-total .stat-value { color: #fff; }
+        #stat-pass .stat-value { color: var(--color-success); }
+        #stat-fail .stat-value { color: var(--color-error); }
+        #stat-duration .stat-value { color: var(--color-accent-hover); }
+
+        /* Barre de progression */
+        .progress-container {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--color-accent) 0%, var(--color-success) 100%);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        /* Filtres et Actions */
+        .controls-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            font-family: inherit;
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid var(--border-glass);
+        }
+
+        .btn-filter {
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-secondary);
+        }
+
+        .btn-filter:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+
+        .btn-filter.active {
+            background: var(--color-accent);
+            color: #fff;
+            border-color: var(--color-accent);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+        }
+
+        .btn-primary {
+            background: var(--color-accent);
+            color: #fff;
+            border-color: var(--color-accent);
+            padding: 10px 20px;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+        }
+
+        .btn-primary:hover {
+            background: var(--color-accent-hover);
+            transform: translateY(-1px);
+        }
+
+        /* Liste des tests */
+        .test-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .category-group {
+            margin-bottom: 12px;
+        }
+
+        .category-header {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin: 20px 0 12px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 6px;
+        }
+
+        .test-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            padding: 16px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .test-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .test-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .test-name {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        .test-duration {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .badge {
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 4px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-pending {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-glass);
+        }
+
+        .badge-pass {
+            background: var(--color-success-bg);
+            color: var(--color-success);
+            border: 1px solid var(--color-success-border);
+        }
+
+        .badge-fail {
+            background: var(--color-error-bg);
+            color: var(--color-error);
+            border: 1px solid var(--color-error-border);
+        }
+
+        .error-log {
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            padding: 12px;
+            border-radius: 6px;
+            color: #fca5a5;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Conteneur caché pour exécuter GameController */
+        #sandbox {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>CONSOLES DE TESTS UNITAIRES</h1>
+            <p class="subtitle">Validation des règles d'échecs & fonctionnalités récentes</p>
+        </header>
+
+        <!-- Résumé statistique -->
+        <div class="summary-card">
+            <div class="summary-grid">
+                <div class="stat-box" id="stat-total">
+                    <div class="stat-value">0</div>
+                    <div class="stat-label">Tests Totaux</div>
+                </div>
+                <div class="stat-box" id="stat-pass">
+                    <div class="stat-value">0</div>
+                    <div class="stat-label">Réussis</div>
+                </div>
+                <div class="stat-box" id="stat-fail">
+                    <div class="stat-value">0</div>
+                    <div class="stat-label">Échecs</div>
+                </div>
+                <div class="stat-box" id="stat-duration">
+                    <div class="stat-value">0ms</div>
+                    <div class="stat-label">Temps total</div>
+                </div>
+            </div>
+
+            <div class="progress-container">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+            <div class="progress-text">
+                <span id="progress-percent">Prêt pour les tests</span>
+                <span id="progress-ratio">0 / 0</span>
+            </div>
+        </div>
+
+        <!-- Contrôles et Filtres -->
+        <div class="controls-bar">
+            <div class="filter-buttons">
+                <button class="btn btn-filter active" data-filter="all">Tous</button>
+                <button class="btn btn-filter" data-filter="Configuration Initiale">Configuration</button>
+                <button class="btn btn-filter" data-filter="Mouvements de Base">Mouvements</button>
+                <button class="btn btn-filter" data-filter="Coups Spéciaux">Coups Spéciaux</button>
+                <button class="btn btn-filter" data-filter="Le Roque">Le Roque</button>
+                <button class="btn btn-filter" data-filter="Échecs et Menaces">Échecs</button>
+                <button class="btn btn-filter" data-filter="Fin de Partie (Nulles)">Nulles</button>
+                <button class="btn btn-filter" data-filter="Améliorations Récentes">Améliorations</button>
+            </div>
+            <button class="btn btn-primary" id="btn-run">Lancer les tests</button>
+        </div>
+
+        <!-- Liste des résultats -->
+        <div class="test-list" id="test-list-container">
+            <!-- Rempli en JS -->
+        </div>
+    </div>
+
+    <!-- Conteneur Sandbox invisible pour instancier GameController sans erreurs DOM -->
+    <div id="sandbox">
+        <div id="menu-view"></div>
+        <div id="game-view"></div>
+        <input id="player1-name" value="Joueur 1" />
+        <input id="player2-name" value="Joueur 2" />
+        <button id="btn-clear-p1"></button>
+        <button id="btn-clear-p2"></button>
+        <button id="btn-play"></button>
+        <input type="checkbox" id="sound-toggle" checked />
+        <button id="btn-rotate"></button>
+        <span id="rotate-label">Rotation Auto : OFF</span>
+        <button id="btn-resign"></button>
+        <button id="btn-draw"></button>
+        
+        <div id="draw-offer-overlay">
+            <span id="draw-offer-text"></span>
+            <button id="btn-accept-draw"></button>
+            <button id="btn-refuse-draw"></button>
+        </div>
+        <button id="btn-replay"></button>
+        <button id="btn-back-menu"></button>
+        
+        <div id="promotion-overlay">
+            <button class="promo-option" data-piece="d"></button>
+            <button class="promo-option" data-piece="t"></button>
+            <button class="promo-option" data-piece="f"></button>
+            <button class="promo-option" data-piece="c"></button>
+            <button id="btn-cancel-promotion"></button>
+        </div>
+        
+        <button id="btn-hist-first"></button>
+        <button id="btn-hist-prev"></button>
+        <button id="btn-hist-next"></button>
+        <button id="btn-hist-last"></button>
+        <button id="btn-export-pgn"></button>
+        <button id="btn-return-live"></button>
+        
+        <span id="opp-color-indicator"></span>
+        <span id="opp-name-display"></span>
+        <span id="opp-score-display"></span>
+        <div id="opp-timer"></div>
+        
+        <span id="curr-color-indicator"></span>
+        <span id="curr-name-display"></span>
+        <span id="curr-score-display"></span>
+        <div id="curr-timer"></div>
+        
+        <span id="turn-display"></span>
+        <div id="board"></div>
+        <div id="move-history"></div>
+        <div id="history-banner"></div>
+        
+        <div id="game-over-overlay">
+            <span id="game-over-title"></span>
+            <span id="game-over-result"></span>
+            <span id="game-over-reason"></span>
+            <button id="btn-replay"></button>
+            <button id="btn-back-menu"></button>
+        </div>
+
+        <button class="time-btn" data-time="600" data-inc="15"></button>
+    </div>
+
+    <!-- Script de test -->
+    <script type="module">
+        import { tests } from './tests.js?v=2';
+
+        let activeFilter = 'all';
+
+        // Initialisation de la page
+        document.addEventListener('DOMContentLoaded', () => {
+            renderTestPlaceholders();
+            
+            document.getElementById('btn-run').addEventListener('click', runAllTests);
+
+            const filterBtns = document.querySelectorAll('.btn-filter');
+            filterBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    filterBtns.forEach(b => b.classList.remove('active'));
+                    e.currentTarget.classList.add('active');
+                    activeFilter = e.currentTarget.getAttribute('data-filter');
+                    filterDisplay();
+                });
+            });
+        });
+
+        // Afficher la liste de départ des tests en attente (PENDING)
+        function renderTestPlaceholders() {
+            const container = document.getElementById('test-list-container');
+            container.innerHTML = "";
+
+            let totalTestsCount = 0;
+
+            for (const category in tests) {
+                const catSection = document.createElement('div');
+                catSection.className = 'category-group';
+                catSection.setAttribute('data-category', category);
+
+                const catHeader = document.createElement('div');
+                catHeader.className = 'category-header';
+                catHeader.innerHTML = `📂 ${category}`;
+                catSection.appendChild(catHeader);
+
+                for (const testName in tests[category]) {
+                    totalTestsCount++;
+                    const card = document.createElement('div');
+                    card.className = 'test-card';
+                    card.setAttribute('data-test', testName);
+                    card.innerHTML = `
+                        <div class="test-header">
+                            <div class="test-info">
+                                <span class="test-name">${testName}</span>
+                                <span class="test-duration" id="duration-${testName}"></span>
+                            </div>
+                            <span class="badge badge-pending" id="badge-${testName}">En attente</span>
+                        </div>
+                    `;
+                    catSection.appendChild(card);
+                }
+                container.appendChild(catSection);
+            }
+
+            document.querySelector('#stat-total .stat-value').textContent = totalTestsCount;
+            document.getElementById('progress-ratio').textContent = `0 / ${totalTestsCount}`;
+        }
+
+        // Appliquer le filtre de visibilité
+        function filterDisplay() {
+            const groups = document.querySelectorAll('.category-group');
+            groups.forEach(group => {
+                const catName = group.getAttribute('data-category');
+                if (activeFilter === 'all' || activeFilter === catName) {
+                    group.style.display = 'block';
+                } else {
+                    group.style.display = 'none';
+                }
+            });
+        }
+
+        // Exécuter tous les tests sequentially
+        async function runAllTests() {
+            const runBtn = document.getElementById('btn-run');
+            runBtn.disabled = true;
+            runBtn.textContent = "Exécution...";
+
+            let passed = 0;
+            let failed = 0;
+            let totalTime = 0;
+            let currentTestIndex = 0;
+
+            // Récupérer le nombre total de tests
+            let totalTestsCount = 0;
+            for (const cat in tests) {
+                totalTestsCount += Object.keys(tests[cat]).length;
+            }
+
+            // Réinitialiser les badges et logs
+            document.querySelectorAll('.error-log').forEach(el => el.remove());
+            document.querySelectorAll('.badge').forEach(b => {
+                b.className = "badge badge-pending";
+                b.textContent = "En attente";
+            });
+            document.querySelectorAll('.test-duration').forEach(d => d.textContent = "");
+
+            const startTotalTime = performance.now();
+
+            for (const category in tests) {
+                for (const testName in tests[category]) {
+                    currentTestIndex++;
+                    const badge = document.getElementById(`badge-${testName}`);
+                    const durationEl = document.getElementById(`duration-${testName}`);
+                    const card = document.querySelector(`[data-test="${testName}"]`);
+
+                    // Petite pause asynchrone pour animer le dashboard en temps réel
+                    await new Promise(resolve => setTimeout(resolve, 30));
+
+                    const testFn = tests[category][testName];
+                    const startTestTime = performance.now();
+
+                    try {
+                        testFn(); // Exécution
+                        const endTestTime = performance.now();
+                        const dur = (endTestTime - startTestTime).toFixed(1);
+
+                        passed++;
+                        badge.className = "badge badge-pass";
+                        badge.textContent = "Passé";
+                        durationEl.textContent = `(${dur} ms)`;
+                    } catch (error) {
+                        const endTestTime = performance.now();
+                        const dur = (endTestTime - startTestTime).toFixed(1);
+
+                        failed++;
+                        badge.className = "badge badge-fail";
+                        badge.textContent = "Échoué";
+                        durationEl.textContent = `(${dur} ms)`;
+
+                        // Ajouter le rapport d'erreur
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'error-log';
+                        errorDiv.textContent = error.stack || error.message || error;
+                        card.appendChild(errorDiv);
+                    }
+
+                    // Mettre à jour la synthèse
+                    document.querySelector('#stat-pass .stat-value').textContent = passed;
+                    document.querySelector('#stat-fail .stat-value').textContent = failed;
+                    
+                    const runningTotalDur = (performance.now() - startTotalTime).toFixed(0);
+                    document.querySelector('#stat-duration .stat-value').textContent = `${runningTotalDur}ms`;
+
+                    const percent = Math.round((currentTestIndex / totalTestsCount) * 100);
+                    document.getElementById('progress-bar').style.width = `${percent}%`;
+                    document.getElementById('progress-percent').textContent = `Progression : ${percent}%`;
+                    document.getElementById('progress-ratio').textContent = `${currentTestIndex} / ${totalTestsCount}`;
+                }
+            }
+
+            const endTotalTime = performance.now();
+            totalTime = (endTotalTime - startTotalTime).toFixed(0);
+            
+            document.querySelector('#stat-duration .stat-value').textContent = `${totalTime}ms`;
+            document.getElementById('progress-percent').textContent = failed === 0 
+                ? "Tous les tests sont passés avec succès !" 
+                : `${failed} test(s) ont échoué.`;
+            
+            runBtn.disabled = false;
+            runBtn.textContent = "Relancer";
+        }
+    </script>
+</body>
+</html>

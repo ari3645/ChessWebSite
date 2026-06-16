@@ -743,6 +743,105 @@ input:checked + .slider:before {
     background: rgba(255,255,255,0.08);
 }
 
+.move-white.active-move, .move-black.active-move {
+    background-color: var(--color-accent) !important;
+    color: #fff !important;
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+}
+
+/* Bannière d'historique */
+.history-banner {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    color: #e2e8f0;
+    padding: 10px 16px;
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    font-weight: 500;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+    animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+    from { transform: translateY(-10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.history-banner.active {
+    display: flex;
+}
+
+.history-banner-text {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.history-banner-text::before {
+    content: "ℹ️";
+    font-size: 1rem;
+}
+
+.btn-xs {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-radius: var(--radius-sm);
+    background: var(--color-accent);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
+}
+
+.btn-xs:hover {
+    background: var(--color-accent-hover);
+    transform: translateY(-1px);
+}
+
+.btn-xs:active {
+    transform: translateY(0);
+}
+
+/* Navigation et PGN */
+.history-navigation {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 15px;
+}
+
+.history-navigation .nav-btn {
+    flex: 1;
+    padding: 6px 0;
+    font-size: 1.25rem;
+    font-weight: 800;
+    border-radius: var(--radius-sm);
+    line-height: 1;
+}
+
+.pgn-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.btn-sm {
+    flex: 1;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+}
+
 /* Footer & Actions de jeu */
 .sidebar-footer {
     border-top: 1px solid var(--border-glass);
