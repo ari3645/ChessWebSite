@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jeu d'Échecs Moderne</title>
+    <!-- Google Fonts: Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app" class="app-container">
+        <!-- VUE DU MENU PRINCIPAL -->
+        <div id="menu-view" class="view card active">
+            <header class="menu-header">
+                <h1>JEU D'ÉCHECS</h1>
+                <p class="subtitle">Une expérience de jeu épurée & moderne</p>
+            </header>
+
+            <main class="menu-body">
+                <!-- Noms des joueurs -->
+                <div class="player-inputs">
+                    <div class="input-group">
+                        <label for="player1-name">Joueur 1 (Blancs)</label>
+                        <div class="input-wrapper">
+                            <input type="text" id="player1-name" value="Joueur 1" maxlength="15" autocomplete="off">
+                            <button class="btn-clear" id="btn-clear-p1" title="Effacer">&times;</button>
+                        </div>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="player2-name">Joueur 2 (Noirs)</label>
+                        <div class="input-wrapper">
+                            <input type="text" id="player2-name" value="Joueur 2" maxlength="15" autocomplete="off">
+                            <button class="btn-clear" id="btn-clear-p2" title="Effacer">&times;</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Contrôle du temps -->
+                <div class="time-control-section">
+                    <label>Contrôle du Temps</label>
+                    <div class="time-selector">
+                        <button class="time-btn active" data-time="600" data-inc="15">
+                            <span class="time-label">10 min + 15s</span>
+                            <span class="time-sub">Rapide</span>
+                        </button>
+                        <button class="time-btn" data-time="180" data-inc="2">
+                            <span class="time-label">3 min + 2s</span>
+                            <span class="time-sub">Blitz</span>
+                        </button>
+                        <button class="time-btn" data-time="60" data-inc="0">
+                            <span class="time-label">1 min + 0s</span>
+                            <span class="time-sub">Bullet</span>
+                        </button>
+                        <button class="time-btn" data-time="null" data-inc="null">
+                            <span class="time-label">Sans temps</span>
+                            <span class="time-sub">Amical</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Options -->
+                <div class="game-options">
+                    <div class="option-row">
+                        <div class="option-info">
+                            <span class="option-title">Sons de jeu</span>
+                            <span class="option-desc">Effets sonores lors des coups et alertes.</span>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="sound-toggle" checked>
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </main>
+
+            <footer class="menu-footer">
+                <button id="btn-play" class="btn btn-primary btn-pulse">JOUER</button>
+            </footer>
+        </div>
+
+        <!-- VUE DE JEU (PLATEAU ET SIDEBAR) -->
+        <div id="game-view" class="view">
+            <div class="game-layout">
+                <!-- Zone de l'échiquier -->
+                <div class="board-area">
+                    <!-- Indicateur du joueur adverse en haut -->
+                    <div class="player-bar opponent-bar">
+                        <div class="player-info-mini">
+                            <span class="player-color-dot black-dot" id="opp-color-indicator"></span>
+                            <span class="player-name-display" id="opp-name-display">Joueur 2</span>
+                            <span class="player-score" id="opp-score-display">(0.0)</span>
+                        </div>
+                        <div class="timer-display opponent-timer" id="opp-timer">--:--</div>
+                    </div>
+
+                    <!-- L'échiquier physique -->
+                    <div class="board-container">
+                        <div id="board" class="chessboard">
+                            <!-- Les cases et les pièces seront générées dynamiquement en JS -->
+                        </div>
+                    </div>
+
+                    <!-- Indicateur du joueur actif en bas -->
+                    <div class="player-bar current-bar">
+                        <div class="player-info-mini">
+                            <span class="player-color-dot white-dot" id="curr-color-indicator"></span>
+                            <span class="player-name-display" id="curr-name-display">Joueur 1</span>
+                            <span class="player-score" id="curr-score-display">(0.0)</span>
+                        </div>
+                        <div class="timer-display current-timer" id="curr-timer">--:--</div>
+                    </div>
+                </div>
+
+                <!-- Barre latérale d'actions et d'historique -->
+                <aside class="sidebar card">
+                    <div class="sidebar-header">
+                        <h2>Contrôles</h2>
+                        <span class="turn-indicator" id="turn-display">Trait aux Blancs</span>
+                    </div>
+
+                    <div class="sidebar-content">
+                        <!-- Historique des coups -->
+                        <div class="move-history-container">
+                            <h3>Historique des coups</h3>
+                            <div class="move-history-list" id="move-history">
+                                <!-- Généré en JS -->
+                                <div class="empty-history">Aucun coup joué</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="sidebar-footer">
+                        <!-- Options en jeu -->
+                        <div class="game-actions">
+                            <button id="btn-rotate" class="btn btn-secondary btn-icon" title="Activer/Désactiver la rotation automatique">
+                                <svg class="icon" viewBox="0 0 24 24"><path d="M7 9h-7v-7h1.93c.31.54.69 1.05 1.12 1.52 1.91-2.09 4.67-3.52 7.95-3.52 6.07 0 11 4.93 11 11s-4.93 11-11 11c-4.48 0-8.34-2.68-10.07-6.54l1.86-.75c1.37 3.05 4.4 5.29 7.96 5.29 4.97 0 9-4.03 9-9s-4.03-9-9-9c-2.61 0-4.93 1.12-6.57 2.91l1.63 1.63h-6.94z"/></svg>
+                                <span id="rotate-label">Rotation Auto : OFF</span>
+                            </button>
+                            
+                            <button id="btn-draw" class="btn btn-secondary">
+                                Proposer Nulle
+                            </button>
+                            
+                            <button id="btn-resign" class="btn btn-danger">
+                                Abandonner
+                            </button>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+        </div>
+
+        <!-- MODAL DE PROMOTION -->
+        <div id="promotion-overlay" class="overlay">
+            <div class="modal-card promotion-card">
+                <h3>Promotion du pion</h3>
+                <p>Choisissez la pièce de promotion :</p>
+                <div class="promotion-options">
+                    <button class="promo-option" data-piece="d" title="Dame"></button>
+                    <button class="promo-option" data-piece="t" title="Tour"></button>
+                    <button class="promo-option" data-piece="f" title="Fou"></button>
+                    <button class="promo-option" data-piece="c" title="Cavalier"></button>
+                </div>
+                <button id="btn-cancel-promotion" class="btn btn-secondary">Annuler</button>
+            </div>
+        </div>
+
+        <!-- MODAL DE PROPOSITION DE NULLE (ALERT) -->
+        <div id="draw-offer-overlay" class="overlay">
+            <div class="modal-card">
+                <h3>Proposition de Nulle</h3>
+                <p id="draw-offer-text">Votre adversaire propose le match nul. Acceptez-vous ?</p>
+                <div class="modal-buttons">
+                    <button id="btn-accept-draw" class="btn btn-success">Accepter</button>
+                    <button id="btn-refuse-draw" class="btn btn-danger">Refuser</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL DE FIN DE PARTIE (GAME OVER) -->
+        <div id="game-over-overlay" class="overlay">
+            <div class="modal-card game-over-card">
+                <span class="game-over-icon">🏆</span>
+                <h2 id="game-over-title">FIN DE PARTIE</h2>
+                <h3 id="game-over-result">Les Blancs gagnent !</h3>
+                <p id="game-over-reason">Par échec et mat.</p>
+                
+                <div class="modal-buttons game-over-buttons">
+                    <button id="btn-replay" class="btn btn-success">Rejouer</button>
+                    <button id="btn-back-menu" class="btn btn-secondary">Menu Principal</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
