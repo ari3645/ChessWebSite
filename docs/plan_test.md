@@ -54,3 +54,11 @@ Ce document liste l'ensemble des scénarios de test validant le comportement et 
     *   Roi + Cavalier vs Roi.
 *   [x] **test_fifty_move_rule** : Valider le nul automatique après 50 coups complets (100 demi-coups) sans capture ni poussée de pion.
 *   [x] **test_fifty_move_rule_capture** : Vérifier qu'une capture ou une poussée de pion réinitialise bien le compteur des 50 coups.
+
+### 7. Améliorations Récentes (Fonctionnalités Web & UI)
+*   [x] **test_castling_rights_revocation_on_rook_capture** : Vérifier que les droits de roque du Roi sont révoqués si la Tour concernée est capturée par l'adversaire (même si le Roi n'a pas bougé).
+*   [x] **test_pgn_translation** : Valider la conversion correcte des coups de la notation algébrique française (T, C, F, D, R) vers la notation standard anglaise (R, N, B, Q, K) pour l'exportation PGN.
+*   [x] **test_history_snapshot_state** : Vérifier que chaque déplacement enregistre fidèlement l'état de la partie (trait, temps, cible en passant) dans l'historique et gère la navigation temporelle.
+*   [x] **test_move_history_navigation** : Vérifier le recul dans le temps dans l'historique, la mise à jour correcte de l'échiquier HTML/DOM, l'interdiction des clics en cours de navigation historique et le retour à la partie en direct.
+*   [x] **test_draw_offer_flow** : Valider le flux de proposition et d'acceptation mutuelle d'un match nul via l'overlay graphique.
+*   [x] **test_resign_flow** : Valider le flux d'abandon d'un joueur, la mise à jour immédiate du score et l'affichage de l'écran de fin de partie.

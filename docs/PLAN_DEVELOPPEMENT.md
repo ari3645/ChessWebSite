@@ -59,7 +59,8 @@ Créer un jeu d'échecs fonctionnel pour deux joueurs en local avec une interfac
 - [x] Refonte de l'interface avec des boutons interactifs (Hitboxes fiables, effets hover).
 - [x] Nouveau design moderne pour le menu principal.
 - [x] Ajouter des effets sonores (déplacement, capture, échec) via Web Audio API.
-- [x] Historique des coups (notation algébrique en français dans la barre latérale, navigation au clic et boutons, raccourcis clavier, bannière interactive de retour au direct, export/import PGN standard en anglais).
+- [x] Historique des coups (notation algébrique en français dans la barre latérale, navigation au clic et boutons, raccourcis clavier, bannière interactive de retour au direct, export PGN standard en anglais (importation retirée)).
+- [x] Réorganisation et intégration des tests unitaires complets dans un dossier dédié `/tests` avec tableau de bord web interactif.
 - [ ] Menu de paramètres (choix des thèmes de couleurs et de l'apparence des pièces).
 - [ ] (Amélioration) Différencier les sons de promotion (capture vs simple mouvement).
 - [ ] (Optionnel) Sauvegarde et chargement de partie (via localStorage).
