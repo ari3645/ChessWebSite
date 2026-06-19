@@ -691,9 +691,13 @@ export class GameController {
 
             // Sons en fonction des actions
             if (moveInfo.checkmate) {
-                this.soundManager.play('game_over');
+                // Le son de fin de partie 'game_over' est joué automatiquement dans endGame()
+            } else if (moveInfo.draw) {
+                // Le son de fin de partie 'game_over' est joué automatiquement dans endGame()
             } else if (moveInfo.check) {
                 this.soundManager.play('check');
+            } else if (moveInfo.promotion) {
+                this.soundManager.play('promote');
             } else if (moveInfo.castle) {
                 this.soundManager.play('castle');
             } else if (moveInfo.capture) {

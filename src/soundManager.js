@@ -14,10 +14,12 @@ export class SoundManager {
             const audio = new Audio();
             // On teste en format mp3 puis wav
             audio.src = `assets/sounds/${name}.mp3`;
-            audio.addEventListener('error', () => {
-                // Si le mp3 échoue, on tente le wav local
+            const onError = () => {
+                // Si le mp3 échoue, on tente le wav local une seule fois
+                audio.removeEventListener('error', onError);
                 audio.src = `assets/sounds/${name}.wav`;
-            });
+            };
+            audio.addEventListener('error', onError);
             this.sounds[name] = audio;
         });
     }
@@ -55,18 +57,18 @@ export class SoundManager {
             
             switch (name) {
                 case 'move':
-                    this.playWoodKnock(120, 0.08, now);
+                    this.playWoodKnock(300, 0.07, now);
                     break;
                 case 'capture':
-                    this.playWoodKnock(160, 0.05, now);
-                    this.playWoodKnock(140, 0.06, now + 0.06);
+                    this.playWoodKnock(380, 0.05, now);
+                    this.playWoodKnock(320, 0.05, now + 0.05);
                     break;
                 case 'check':
                     this.playDualTone(440, 554, 0.25, now);
                     break;
                 case 'castle':
-                    this.playWoodKnock(130, 0.08, now);
-                    this.playWoodKnock(110, 0.08, now + 0.12);
+                    this.playWoodKnock(280, 0.08, now);
+                    this.playWoodKnock(240, 0.08, now + 0.1);
                     break;
                 case 'promote':
                     this.playArpeggio([261.6, 329.6, 392, 523.3], 0.3, now);
@@ -81,21 +83,35 @@ export class SoundManager {
     }
 
     playWoodKnock(freq, duration, time) {
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
+        // 1. Attaque percutante (clic à haute fréquence)
+        const clickOsc = this.ctx.createOscillator();
+        const clickGain = this.ctx.createGain();
         
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, time);
-        osc.frequency.exponentialRampToValueAtTime(10, time + duration);
+        clickOsc.type = 'sine';
+        clickOsc.frequency.setValueAtTime(1000, time);
         
-        gain.gain.setValueAtTime(0.3, time);
-        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        clickGain.gain.setValueAtTime(0.08, time);
+        clickGain.gain.exponentialRampToValueAtTime(0.001, time + 0.008);
         
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
+        clickOsc.connect(clickGain);
+        clickGain.connect(this.ctx.destination);
+        clickOsc.start(time);
+        clickOsc.stop(time + 0.01);
+
+        // 2. Corps sonore en bois (triangle à fréquence stable)
+        const bodyOsc = this.ctx.createOscillator();
+        const bodyGain = this.ctx.createGain();
         
-        osc.start(time);
-        osc.stop(time + duration);
+        bodyOsc.type = 'triangle';
+        bodyOsc.frequency.setValueAtTime(freq, time);
+        
+        bodyGain.gain.setValueAtTime(0.2, time);
+        bodyGain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        
+        bodyOsc.connect(bodyGain);
+        bodyGain.connect(this.ctx.destination);
+        bodyOsc.start(time);
+        bodyOsc.stop(time + duration + 0.01);
     }
 
     playDualTone(f1, f2, duration, time) {

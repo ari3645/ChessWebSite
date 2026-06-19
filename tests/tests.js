@@ -686,5 +686,133 @@ export const tests = {
             Assert.equals(controller.state, "PLAYING", "L'état du jeu doit repasser à PLAYING");
             Assert.equals(controller.board.turn, 'n');
         }
+    },
+
+    // -------------------------------------------------------------
+    // CATEGORY: Sons de Jeu
+    // -------------------------------------------------------------
+    "Sons de Jeu": {
+        "test_sound_on_move": () => {
+            const controller = new GameController();
+            controller.player1Name = "Alice";
+            controller.player2Name = "Bob";
+            controller.startGame();
+
+            let playedSound = null;
+            controller.soundManager.play = (name) => {
+                playedSound = name;
+            };
+
+            // Coup simple e2-e4
+            controller.executeMove({ r: 6, c: 4 }, { r: 4, c: 4 });
+            Assert.equals(playedSound, "move", "Le son de déplacement simple doit être 'move'");
+        },
+
+        "test_sound_on_capture": () => {
+            const controller = new GameController();
+            controller.player1Name = "Alice";
+            controller.player2Name = "Bob";
+            controller.startGame();
+
+            // Configurer une capture de pion
+            controller.board.grid[5][3] = "pn"; // pion noir en d3
+            controller.board.turn = 'b';
+
+            let playedSound = null;
+            controller.soundManager.play = (name) => {
+                playedSound = name;
+            };
+
+            // Pion blanc e2 capture pion noir en d3 (ligne 6, col 4 vers ligne 5, col 3)
+            controller.executeMove({ r: 6, c: 4 }, { r: 5, c: 3 });
+            Assert.equals(playedSound, "capture", "Le son de capture doit être 'capture'");
+        },
+
+        "test_sound_on_check": () => {
+            const controller = new GameController();
+            controller.player1Name = "Alice";
+            controller.player2Name = "Bob";
+            controller.startGame();
+
+            // Mettre la reine blanche en e3 et enlever les pions devant
+            controller.board.grid[6][4] = ""; // enlever pion e2
+            controller.board.grid[1][4] = ""; // enlever pion e7
+            controller.board.grid[5][4] = "db"; // Dame blanche en e3 (ligne 5)
+            controller.board.turn = 'b';
+
+            let playedSound = null;
+            controller.soundManager.play = (name) => {
+                playedSound = name;
+            };
+
+            // Dame blanche en e3 va en e6 (ligne 5 col 4 vers ligne 2 col 4) -> met le roi noir en e8 en échec
+            controller.executeMove({ r: 5, c: 4 }, { r: 2, c: 4 });
+            Assert.equals(playedSound, "check", "Le son d'échec doit être 'check'");
+        },
+
+        "test_sound_on_promotion": () => {
+            const controller = new GameController();
+            controller.player1Name = "Alice";
+            controller.player2Name = "Bob";
+            controller.startGame();
+
+            // pion blanc en e7 (ligne 1, col 4)
+            controller.board.grid[1][4] = "pb";
+            // vider e8 (ligne 0, col 4)
+            controller.board.grid[0][4] = "";
+            controller.board.turn = 'b';
+
+            let playedSound = null;
+            controller.soundManager.play = (name) => {
+                playedSound = name;
+            };
+
+            // Avancer le pion en e8 avec promotion en dame
+            controller.executeMove({ r: 1, c: 4 }, { r: 0, c: 4 }, 'd');
+            Assert.equals(playedSound, "promote", "Le son de promotion simple doit être 'promote'");
+        },
+
+        "test_sound_on_promotion_with_check": () => {
+            const controller = new GameController();
+            controller.player1Name = "Alice";
+            controller.player2Name = "Bob";
+            controller.startGame();
+
+            // pion blanc en f7 (ligne 1, col 5)
+            controller.board.grid[1][5] = "pb";
+            // vider f8 (ligne 0, col 5)
+            controller.board.grid[0][5] = "";
+            controller.board.turn = 'b';
+
+            let playedSound = null;
+            controller.soundManager.play = (name) => {
+                playedSound = name;
+            };
+
+            // Avancer le pion en f8 avec promotion en dame -> met le roi noir en e8 en échec
+            controller.executeMove({ r: 1, c: 5 }, { r: 0, c: 5 }, 'd');
+            Assert.equals(playedSound, "check", "La promotion avec échec doit jouer le son d'échec ('check')");
+        },
+
+        "test_sound_on_castle": () => {
+            const controller = new GameController();
+            controller.player1Name = "Alice";
+            controller.player2Name = "Bob";
+            controller.startGame();
+
+            // Vider les cases entre le roi blanc et la tour blanche (f1 et g1)
+            controller.board.grid[7][5] = "";
+            controller.board.grid[7][6] = "";
+            controller.board.turn = 'b';
+
+            let playedSound = null;
+            controller.soundManager.play = (name) => {
+                playedSound = name;
+            };
+
+            // Effectuer le petit roque (Roi de e1 à g1)
+            controller.executeMove({ r: 7, c: 4 }, { r: 7, c: 6 });
+            Assert.equals(playedSound, "castle", "Le roque doit jouer le son 'castle'");
+        }
     }
 };

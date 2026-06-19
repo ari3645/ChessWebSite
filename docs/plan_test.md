@@ -68,3 +68,11 @@ Ce document liste l'ensemble des scénarios de test validant le comportement et 
 *   [x] **test_session_load** : Valider la restauration complète de l'état de la partie (grille, noms de joueurs, historique, trait) à partir d'une sauvegarde présente en session.
 *   [x] **test_clear_save_on_game_over** : S'assurer que la sauvegarde en session est détruite dès que la partie se termine.
 *   [x] **test_leave_and_resume_game** : Valider la mise en pause (état MENU) avec sauvegarde, et la reprise (état PLAYING) avec restauration.
+
+### 9. Événements Sonores (Sound Triggers)
+*   [x] **test_sound_on_move** : S'assurer qu'un coup simple joue le son `'move'`.
+*   [x] **test_sound_on_capture** : S'assurer qu'une capture joue le son `'capture'`.
+*   [x] **test_sound_on_check** : S'assurer qu'un coup mettant le Roi adverse en échec joue le son `'check'`.
+*   [x] **test_sound_on_promotion** : S'assurer qu'une promotion sans échec joue le son `'promote'`.
+*   [x] **test_sound_on_promotion_with_check** : S'assurer qu'une promotion provoquant un échec joue le son `'check'` (priorité de l'échec).
+*   [x] **test_sound_on_castle** : S'assurer que le roque joue le son `'castle'`.
