@@ -62,3 +62,9 @@ Ce document liste l'ensemble des scénarios de test validant le comportement et 
 *   [x] **test_move_history_navigation** : Vérifier le recul dans le temps dans l'historique, la mise à jour correcte de l'échiquier HTML/DOM, l'interdiction des clics en cours de navigation historique et le retour à la partie en direct.
 *   [x] **test_draw_offer_flow** : Valider le flux de proposition et d'acceptation mutuelle d'un match nul via l'overlay graphique.
 *   [x] **test_resign_flow** : Valider le flux d'abandon d'un joueur, la mise à jour immédiate du score et l'affichage de l'écran de fin de partie.
+
+### 8. Sauvegarde et Chargement (sessionStorage)
+*   [x] **test_session_save** : Vérifier que le statut de la partie est correctement sérialisé et sauvegardé dans le `sessionStorage` après chaque coup joué.
+*   [x] **test_session_load** : Valider la restauration complète de l'état de la partie (grille, noms de joueurs, historique, trait) à partir d'une sauvegarde présente en session.
+*   [x] **test_clear_save_on_game_over** : S'assurer que la sauvegarde en session est détruite dès que la partie se termine.
+*   [x] **test_leave_and_resume_game** : Valider la mise en pause (état MENU) avec sauvegarde, et la reprise (état PLAYING) avec restauration.

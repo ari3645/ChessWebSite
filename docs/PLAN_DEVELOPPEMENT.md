@@ -63,7 +63,7 @@ Créer un jeu d'échecs fonctionnel pour deux joueurs en local avec une interfac
 - [x] Réorganisation et intégration des tests unitaires complets dans un dossier dédié `/tests` avec tableau de bord web interactif.
 - [ ] Menu de paramètres (choix des thèmes de couleurs et de l'apparence des pièces).
 - [ ] (Amélioration) Différencier les sons de promotion (capture vs simple mouvement).
-- [ ] (Optionnel) Sauvegarde et chargement de partie (via localStorage).
+- [x] Sauvegarde et chargement de partie (via sessionStorage).
 
 ---
 

@@ -95,11 +95,20 @@ export class GameController {
             this.startGame();
         });
 
+        // Bouton reprendre
+        document.getElementById('btn-resume').addEventListener('click', () => {
+            this.resumeGame();
+        });
+
         // Options en jeu
         document.getElementById('btn-rotate').addEventListener('click', () => {
             this.autoRotate = !this.autoRotate;
             document.getElementById('rotate-label').textContent = this.autoRotate ? "Rotation Auto : ON" : "Rotation Auto : OFF";
             this.renderBoard();
+        });
+
+        document.getElementById('btn-leave').addEventListener('click', () => {
+            this.leaveGame();
         });
 
         document.getElementById('btn-resign').addEventListener('click', () => {
@@ -205,6 +214,7 @@ export class GameController {
     }
 
     startGame() {
+        this.clearSavedGame();
         this.board = new Board();
         this.selectedSq = null;
         this.validMoves = [];
@@ -280,11 +290,19 @@ export class GameController {
         // Gérer l'affichage des sections principales
         const menu = document.getElementById('menu-view');
         const game = document.getElementById('game-view');
+        const btnResume = document.getElementById('btn-resume');
 
         if (this.state === "MENU") {
             this.stopTimer();
             menu.classList.add('active');
             game.classList.remove('active');
+            
+            // Afficher le bouton Reprendre si une sauvegarde existe
+            if (sessionStorage.getItem('chess_game_save')) {
+                btnResume.style.display = 'block';
+            } else {
+                btnResume.style.display = 'none';
+            }
         } else {
             menu.classList.remove('active');
             game.classList.add('active');
@@ -691,6 +709,9 @@ export class GameController {
             // Sync du temps de base
             this.lastTickTime = Date.now();
 
+            // Sauvegarder automatiquement après chaque coup joué
+            this.saveGameToSession();
+
             if (moveInfo.checkmate) {
                 const winnerColor = this.board.turn === 'b' ? 'n' : 'b';
                 this.endGame(winnerColor, "mat");
@@ -919,6 +940,7 @@ export class GameController {
     }
 
     endGame(winnerColor, reason) {
+        this.clearSavedGame();
         this.state = "GAME_OVER";
         this.stopTimer();
         this.selectedSq = null;
@@ -1098,5 +1120,88 @@ export class GameController {
             console.error("Erreur copie PGN: ", err);
             alert("Impossible de copier automatiquement. Voici le PGN :\n\n" + pgn);
         });
+    }
+
+    saveGameToSession() {
+        const saveData = {
+            player1Name: this.player1Name,
+            player2Name: this.player2Name,
+            scoreP1: this.scoreP1,
+            scoreP2: this.scoreP2,
+            p1IsWhite: this.p1IsWhite,
+            selectedTimeLimit: this.selectedTimeLimit,
+            selectedIncrement: this.selectedIncrement,
+            timeP1: this.timeP1,
+            timeP2: this.timeP2,
+            autoRotate: this.autoRotate,
+            moveHistory: this.moveHistory,
+            currentHistoryIndex: this.currentHistoryIndex,
+            initialBoardState: this.initialBoardState,
+            board: {
+                grid: this.board.grid,
+                turn: this.board.turn,
+                movedStatus: this.board.movedStatus,
+                enPassantTarget: this.board.enPassantTarget,
+                halfMoveClock: this.board.halfMoveClock,
+                positionHistory: this.board.positionHistory
+            }
+        };
+        sessionStorage.setItem('chess_game_save', JSON.stringify(saveData));
+    }
+
+    loadGameFromSession() {
+        const raw = sessionStorage.getItem('chess_game_save');
+        if (!raw) return false;
+        try {
+            const data = JSON.parse(raw);
+            this.player1Name = data.player1Name;
+            this.player2Name = data.player2Name;
+            this.scoreP1 = data.scoreP1;
+            this.scoreP2 = data.scoreP2;
+            this.p1IsWhite = data.p1IsWhite;
+            this.selectedTimeLimit = data.selectedTimeLimit;
+            this.selectedIncrement = data.selectedIncrement;
+            this.timeP1 = data.timeP1;
+            this.timeP2 = data.timeP2;
+            this.autoRotate = data.autoRotate;
+            this.moveHistory = data.moveHistory;
+            this.currentHistoryIndex = data.currentHistoryIndex;
+            this.initialBoardState = data.initialBoardState;
+
+            this.board = new Board();
+            this.board.grid = data.board.grid;
+            this.board.turn = data.board.turn;
+            this.board.movedStatus = data.board.movedStatus;
+            this.board.enPassantTarget = data.board.enPassantTarget;
+            this.board.halfMoveClock = data.board.halfMoveClock;
+            this.board.positionHistory = data.board.positionHistory;
+
+            return true;
+        } catch (e) {
+            console.error("Error loading chess game", e);
+            return false;
+        }
+    }
+
+    clearSavedGame() {
+        sessionStorage.removeItem('chess_game_save');
+    }
+
+    leaveGame() {
+        if (this.state !== "PLAYING") return;
+        this.saveGameToSession();
+        this.stopTimer();
+        this.state = "MENU";
+        this.updateView();
+    }
+
+    resumeGame() {
+        if (this.loadGameFromSession()) {
+            this.state = "PLAYING";
+            this.lastTickTime = Date.now();
+            this.startTimer();
+            this.updateView();
+            this.soundManager.initAudioContext();
+        }
     }
 }

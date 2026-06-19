@@ -606,5 +606,85 @@ export const tests = {
             Assert.equals(document.getElementById('game-over-title').textContent, "VICTOIRE", "Le titre doit être VICTOIRE");
             Assert.equals(document.getElementById('game-over-reason').textContent, "Par abandon de l'adversaire.", "La raison doit être l'abandon");
         }
+    },
+
+    // -------------------------------------------------------------
+    // CATEGORY: Sauvegarde et Chargement
+    // -------------------------------------------------------------
+    "Sauvegarde et Chargement": {
+        "test_session_save": () => {
+            sessionStorage.removeItem('chess_game_save');
+            const controller = new GameController();
+            controller.player1Name = "Alice";
+            controller.player2Name = "Bob";
+            controller.startGame();
+
+            // Jouer un coup e2-e4
+            controller.executeMove({ r: 6, c: 4 }, { r: 4, c: 4 });
+
+            // Vérifier que la sauvegarde automatique en session a fonctionné
+            const raw = sessionStorage.getItem('chess_game_save');
+            Assert.isNotNull(raw, "La partie devrait être sauvegardée dans le sessionStorage après un coup");
+
+            const data = JSON.parse(raw);
+            Assert.equals(data.player1Name, "Alice");
+            Assert.equals(data.player2Name, "Bob");
+            Assert.equals(data.moveHistory.length, 1, "L'historique sauvegardé devrait contenir 1 coup");
+        },
+
+        "test_session_load": () => {
+            sessionStorage.removeItem('chess_game_save');
+            const controller1 = new GameController();
+            controller1.player1Name = "Alice";
+            controller1.player2Name = "Bob";
+            controller1.startGame();
+            // Coup e2-e4
+            controller1.executeMove({ r: 6, c: 4 }, { r: 4, c: 4 });
+
+            // Charger dans un second contrôleur
+            const controller2 = new GameController();
+            const success = controller2.loadGameFromSession();
+            Assert.isTrue(success, "Le chargement depuis la session devrait réussir");
+
+            Assert.equals(controller2.player1Name, "Alice");
+            Assert.equals(controller2.player2Name, "Bob");
+            Assert.equals(controller2.moveHistory.length, 1);
+            Assert.equals(controller2.board.turn, 'n', "Le trait doit être aux Noirs");
+            Assert.equals(controller2.board.grid[4][4], "pb", "Le pion blanc doit être restauré en e4");
+        },
+
+        "test_clear_save_on_game_over": () => {
+            sessionStorage.removeItem('chess_game_save');
+            const controller = new GameController();
+            controller.player1Name = "Alice";
+            controller.player2Name = "Bob";
+            controller.startGame();
+            controller.executeMove({ r: 6, c: 4 }, { r: 4, c: 4 });
+
+            Assert.isNotNull(sessionStorage.getItem('chess_game_save'));
+
+            // Fin de la partie par abandon
+            controller.endGame('n', 'abandon');
+            Assert.isNull(sessionStorage.getItem('chess_game_save'), "La sauvegarde devrait être effacée en fin de partie");
+        },
+
+        "test_leave_and_resume_game": () => {
+            sessionStorage.removeItem('chess_game_save');
+            const controller = new GameController();
+            controller.player1Name = "Alice";
+            controller.player2Name = "Bob";
+            controller.startGame();
+            controller.executeMove({ r: 6, c: 4 }, { r: 4, c: 4 });
+
+            // Quitter la partie
+            controller.leaveGame();
+            Assert.equals(controller.state, "MENU", "L'état du jeu doit être MENU après avoir quitté");
+            Assert.isNotNull(sessionStorage.getItem('chess_game_save'));
+
+            // Reprendre la partie
+            controller.resumeGame();
+            Assert.equals(controller.state, "PLAYING", "L'état du jeu doit repasser à PLAYING");
+            Assert.equals(controller.board.turn, 'n');
+        }
     }
 };
