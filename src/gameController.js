@@ -380,6 +380,11 @@ export class GameController {
                 try {
                     this.aiWorker = new Worker('./src/aiWorker.js', { type: 'module' });
                     this.aiWorker.onmessage = (e) => this.handleAiWorkerMessage(e);
+                    this.aiWorker.onerror = (err) => {
+                        console.error("[GameController] Erreur critique dans le Web Worker :", err);
+                        this.isAiThinking = false;
+                        this.updateIndicators();
+                    };
                 } catch (err) {
                     console.error("Erreur d'initialisation du Web Worker IA :", err);
                     alert("Impossible de démarrer le moteur de l'IA (CORS/file:// bloqué par le navigateur ou type:module non supporté). La partie va démarrer en mode d'évaluation locale si possible, ou vous pouvez héberger l'application sur un serveur local.");
@@ -1593,6 +1598,11 @@ export class GameController {
             if (this.gameMode !== 'pvp') {
                 this.aiWorker = new Worker('./src/aiWorker.js', { type: 'module' });
                 this.aiWorker.onmessage = (e) => this.handleAiWorkerMessage(e);
+                this.aiWorker.onerror = (err) => {
+                    console.error("[GameController] Erreur critique dans le Web Worker :", err);
+                    this.isAiThinking = false;
+                    this.updateIndicators();
+                };
             }
 
             this.state = "PLAYING";

@@ -10,6 +10,51 @@ const PIECE_VALUES = {
     'r': 20000
 };
 
+// Mutable evaluation parameters for TD-learning
+let EVAL_PARAMS = null;
+const DEFAULT_EVAL_PARAMS = {
+    bishopPairBonus: 30,
+    pawnRimPenalty: 15,
+    pawnDoubledPenalty: 15,
+    pawnIsolatedPenalty: 15,
+    pawnConnectedBonus: 5,
+    pawnPassedBonusMultiplier: 10,
+    pawnBlockadePenalty: 15,
+    pawnForkBonus: 50,
+    knightForkBonus: 40,
+    rookTarraschBonus: 20,
+    rook7thRankBonus: 25,
+    rook7thRankTrappedKingBonus: 40,
+    rookConnectedBonus: 15,
+    badBishopPawnFactor: 8,
+    undevelopedMinorPenalty: 15,
+    queenEarlyPenalty: 20,
+    knightOutpostBonus: 30,
+    centerControlBonus: 5,
+    defendedByPawnBonus: 10,
+    openFileKingPenalty: 25,
+    semiOpenFileKingPenalty: 15,
+    castlingRightsBonus: 15,
+    lostCastlingRightsPenalty: 25
+};
+
+async function initWeights() {
+    if (EVAL_PARAMS) return;
+    try {
+        const db = await openDB();
+        const record = await getRecord(db, "global_weights");
+        if (record && record.weights) {
+            EVAL_PARAMS = record.weights;
+            console.log("[IA] Paramètres d'évaluation personnalisés chargés depuis IndexedDB.");
+        } else {
+            EVAL_PARAMS = { ...DEFAULT_EVAL_PARAMS };
+        }
+    } catch (e) {
+        console.warn("[IA] Échec du chargement des poids depuis IndexedDB, utilisation des valeurs par défaut.", e);
+        EVAL_PARAMS = { ...DEFAULT_EVAL_PARAMS };
+    }
+}
+
 // Piece-Square Tables (PST) from White ('b') perspective
 const PST = {
     p: [
@@ -81,47 +126,71 @@ const STORE_NAME = "opening_book";
 
 function openDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-        request.onupgradeneeded = function (e) {
-            const db = e.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                db.createObjectStore(STORE_NAME, { keyPath: "signature" });
-            }
-        };
-        request.onsuccess = function (e) {
-            resolve(e.target.result);
-        };
-        request.onerror = function (e) {
-            reject(e.target.error);
-        };
+        const timer = setTimeout(() => reject(new Error("IndexedDB open timeout")), 500);
+        try {
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            request.onupgradeneeded = function (e) {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    db.createObjectStore(STORE_NAME, { keyPath: "signature" });
+                }
+            };
+            request.onsuccess = function (e) {
+                clearTimeout(timer);
+                resolve(e.target.result);
+            };
+            request.onerror = function (e) {
+                clearTimeout(timer);
+                reject(e.target.error);
+            };
+        } catch (err) {
+            clearTimeout(timer);
+            reject(err);
+        }
     });
 }
 
 function getRecord(db, signature) {
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], "readonly");
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.get(signature);
-        request.onsuccess = function (e) {
-            resolve(e.target.result || null);
-        };
-        request.onerror = function (e) {
-            reject(e.target.error);
-        };
+        const timer = setTimeout(() => reject(new Error("IndexedDB get timeout")), 500);
+        try {
+            const transaction = db.transaction([STORE_NAME], "readonly");
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.get(signature);
+            request.onsuccess = function (e) {
+                clearTimeout(timer);
+                resolve(e.target.result || null);
+            };
+            request.onerror = function (e) {
+                clearTimeout(timer);
+                reject(e.target.error);
+            };
+        } catch (err) {
+            clearTimeout(timer);
+            reject(err);
+        }
     });
 }
 
 function putRecord(db, record) {
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction([STORE_NAME], "readwrite");
-        const store = transaction.objectStore(STORE_NAME);
-        const request = store.put(record);
-        request.onsuccess = function () {
-            resolve();
-        };
-        request.onerror = function (e) {
-            reject(e.target.error);
-        };
+        const timer = setTimeout(() => reject(new Error("IndexedDB put timeout")), 500);
+        try {
+            const transaction = db.transaction([STORE_NAME], "readwrite");
+            const store = transaction.objectStore(STORE_NAME);
+            const request = store.put(record);
+            request.onsuccess = function () {
+                clearTimeout(timer);
+                resolve();
+            };
+            request.onerror = function (e) {
+                clearTimeout(timer);
+                reject(e.target.error);
+            };
+        } catch (err) {
+            clearTimeout(timer);
+            reject(err);
+        }
     });
 }
 
@@ -157,13 +226,8 @@ function attacksCenter(r, c, type, color, board) {
 
 // Evaluate the board position from the perspective of 'b' (white) vs 'n' (black)
 function evaluateBoard(board, depth = 0, style = 'standard') {
+    const P = EVAL_PARAMS || DEFAULT_EVAL_PARAMS;
     let score = 0;
-    
-    // Check game over states
-    if (board.isInCheck('b') && board.isCheckmate('b')) return -99999 - depth;
-    if (board.isInCheck('n') && board.isCheckmate('n')) return 99999 + depth;
-    if (board.isStalemate('b') || board.isStalemate('n')) return 0;
-    if (board.isInsufficientMaterial() || board.isFiftyMoveRule() || board.isThreefoldRepetition()) return 0;
 
     let whiteKing = null;
     let blackKing = null;
@@ -217,7 +281,7 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
                         if (type === 'c') {
                             whiteKnightPositions.push({ r, c });
                             // Knights on the rim penalty
-                            if (c === 0 || c === 7) score -= 15;
+                            if (c === 0 || c === 7) score -= P.pawnRimPenalty;
                         }
                         if (type === 't') {
                             whiteRookPositions.push({ r, c });
@@ -240,7 +304,7 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
                         if (type === 'c') {
                             blackKnightPositions.push({ r, c });
                             // Knights on the rim penalty
-                            if (c === 0 || c === 7) score += 15;
+                            if (c === 0 || c === 7) score += P.pawnRimPenalty;
                         }
                         if (type === 't') {
                             blackRookPositions.push({ r, c });
@@ -264,8 +328,8 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
                 // Center control (pawns, knights, bishops)
                 if (type === 'p' || type === 'c' || type === 'f') {
                     if (attacksCenter(r, c, type, color, board)) {
-                        if (color === 'b') score += 5;
-                        else score -= 5;
+                        if (color === 'b') score += P.centerControlBonus;
+                        else score -= P.centerControlBonus;
                     }
                 }
 
@@ -288,8 +352,8 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
                         }
                     }
                     if (isDefendedByPawn) {
-                        if (color === 'b') score += 10;
-                        else score -= 10;
+                        if (color === 'b') score += P.defendedByPawnBonus;
+                        else score -= P.defendedByPawnBonus;
                     }
                 }
                 
@@ -307,8 +371,8 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
     if (board.grid[3][3] === 'pn' && board.grid[3][4] === 'pn') score -= 20;
 
     // 1. Bonus de la paire de Fous (Bishop Pair Bonus)
-    if (whiteBishops >= 2) score += 30;
-    if (blackBishops >= 2) score -= 30;
+    if (whiteBishops >= 2) score += P.bishopPairBonus;
+    if (blackBishops >= 2) score -= P.bishopPairBonus;
 
     // 2. Structure de pions (doublés, isolés, passés, connectés)
     // --- Pions Blancs ---
@@ -318,14 +382,14 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
         
         // Pions doublés
         if (whitePawnCols[c] > 1) {
-            score -= 15;
+            score -= P.pawnDoubledPenalty;
         }
         
         // Pions isolés
         const hasLeftPawn = c > 0 && whitePawnCols[c - 1] > 0;
         const hasRightPawn = c < 7 && whitePawnCols[c + 1] > 0;
         if (!hasLeftPawn && !hasRightPawn) {
-            score -= 15;
+            score -= P.pawnIsolatedPenalty;
         }
         
         // Pions connectés / protégés
@@ -337,7 +401,7 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
             if (board.grid[r][c + 1] === 'pb' || (r + 1 < 8 && board.grid[r + 1][c + 1] === 'pb')) isConnected = true;
         }
         if (isConnected) {
-            score += 5;
+            score += P.pawnConnectedBonus;
         }
 
         // Pions passés
@@ -348,9 +412,9 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
             if (c < 7 && board.grid[nextR][c + 1] === 'pn') { isPassed = false; break; }
         }
         if (isPassed) {
-            let passVal = (7 - r) * 10;
+            let passVal = (7 - r) * P.pawnPassedBonusMultiplier;
             if (r - 1 >= 0 && board.grid[r - 1][c] !== "") {
-                passVal -= 15;
+                passVal -= P.pawnBlockadePenalty;
             }
             score += passVal;
             
@@ -360,7 +424,7 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
                 if (board.grid[checkR][c] === 'tb') { rookBehind = true; break; }
                 if (board.grid[checkR][c] !== "") break; // Blocked by another piece
             }
-            if (rookBehind) score += 20;
+            if (rookBehind) score += P.rookTarraschBonus;
         }
 
         // Pawn forks
@@ -378,7 +442,7 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
                 }
             }
         }
-        if (pawnForkTargets >= 2) score += 50;
+        if (pawnForkTargets >= 2) score += P.pawnForkBonus;
 
         // Pawn Storm (Aggressive style only)
         if (style === 'aggressive' && blackKing) {
@@ -397,14 +461,14 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
         
         // Pions doublés
         if (blackPawnCols[c] > 1) {
-            score += 15;
+            score += P.pawnDoubledPenalty;
         }
         
         // Pions isolés
         const hasLeftPawn = c > 0 && blackPawnCols[c - 1] > 0;
         const hasRightPawn = c < 7 && blackPawnCols[c + 1] > 0;
         if (!hasLeftPawn && !hasRightPawn) {
-            score += 15;
+            score += P.pawnIsolatedPenalty;
         }
         
         // Pions connectés
@@ -416,7 +480,7 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
             if (board.grid[r][c + 1] === 'pn' || (r - 1 >= 0 && board.grid[r - 1][c + 1] === 'pn')) isConnected = true;
         }
         if (isConnected) {
-            score -= 5;
+            score -= P.pawnConnectedBonus;
         }
 
         // Pions passés
@@ -427,9 +491,9 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
             if (c < 7 && board.grid[nextR][c + 1] === 'pb') { isPassed = false; break; }
         }
         if (isPassed) {
-            let passVal = r * 10;
+            let passVal = r * P.pawnPassedBonusMultiplier;
             if (r + 1 < 8 && board.grid[r + 1][c] !== "") {
-                passVal -= 15;
+                passVal -= P.pawnBlockadePenalty;
             }
             score -= passVal;
 
@@ -439,7 +503,7 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
                 if (board.grid[checkR][c] === 'tn') { rookBehind = true; break; }
                 if (board.grid[checkR][c] !== "") break;
             }
-            if (rookBehind) score -= 20;
+            if (rookBehind) score -= P.rookTarraschBonus;
         }
 
         // Pawn forks
@@ -457,7 +521,7 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
                 }
             }
         }
-        if (pawnForkTargets >= 2) score -= 50;
+        if (pawnForkTargets >= 2) score -= P.pawnForkBonus;
 
         // Pawn Storm (Aggressive style only)
         if (style === 'aggressive' && whiteKing) {
@@ -497,23 +561,23 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
     // Undeveloped Minor Pieces Penalty (Opening & Middlegame)
     if (!isEndgame) {
         let whiteUndeveloped = 0;
-        if (board.grid[7][1] === 'cb') { score -= 15; whiteUndeveloped++; }
-        if (board.grid[7][6] === 'cb') { score -= 15; whiteUndeveloped++; }
-        if (board.grid[7][2] === 'fb') { score -= 15; whiteUndeveloped++; }
-        if (board.grid[7][5] === 'fb') { score -= 15; whiteUndeveloped++; }
+        if (board.grid[7][1] === 'cb') { score -= P.undevelopedMinorPenalty; whiteUndeveloped++; }
+        if (board.grid[7][6] === 'cb') { score -= P.undevelopedMinorPenalty; whiteUndeveloped++; }
+        if (board.grid[7][2] === 'fb') { score -= P.undevelopedMinorPenalty; whiteUndeveloped++; }
+        if (board.grid[7][5] === 'fb') { score -= P.undevelopedMinorPenalty; whiteUndeveloped++; }
 
         let blackUndeveloped = 0;
-        if (board.grid[0][1] === 'cn') { score += 15; blackUndeveloped++; }
-        if (board.grid[0][6] === 'cn') { score += 15; blackUndeveloped++; }
-        if (board.grid[0][2] === 'fn') { score += 15; blackUndeveloped++; }
-        if (board.grid[0][5] === 'fn') { score += 15; blackUndeveloped++; }
+        if (board.grid[0][1] === 'cn') { score += P.undevelopedMinorPenalty; blackUndeveloped++; }
+        if (board.grid[0][6] === 'cn') { score += P.undevelopedMinorPenalty; blackUndeveloped++; }
+        if (board.grid[0][2] === 'fn') { score += P.undevelopedMinorPenalty; blackUndeveloped++; }
+        if (board.grid[0][5] === 'fn') { score += P.undevelopedMinorPenalty; blackUndeveloped++; }
 
         // Queen early development penalty
         if (whiteQueenPos && (whiteQueenPos.r !== 7 || whiteQueenPos.c !== 3) && whiteUndeveloped >= 2) {
-            score -= 20;
+            score -= P.queenEarlyPenalty;
         }
         if (blackQueenPos && (blackQueenPos.r !== 0 || blackQueenPos.c !== 3) && blackUndeveloped >= 2) {
-            score += 20;
+            score += P.queenEarlyPenalty;
         }
     }
 
@@ -536,7 +600,7 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
                 }
             }
         }
-        if (targets >= 2) score += 40;
+        if (targets >= 2) score += P.knightForkBonus;
     }
     for (const kp of blackKnightPositions) {
         let targets = 0;
@@ -552,7 +616,7 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
                 }
             }
         }
-        if (targets >= 2) score -= 40;
+        if (targets >= 2) score -= P.knightForkBonus;
     }
 
     // Knight Outposts
@@ -579,7 +643,7 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
                     if (canBeAttacked) break;
                 }
                 if (!canBeAttacked) {
-                    score += 30;
+                    score += P.knightOutpostBonus;
                 }
             }
         }
@@ -607,7 +671,7 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
                     if (canBeAttacked) break;
                 }
                 if (!canBeAttacked) {
-                    score -= 30;
+                    score -= P.knightOutpostBonus;
                 }
             }
         }
@@ -617,18 +681,18 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
     for (const rp of whiteRookPositions) {
         if (rp.r === 1) {
             if (blackKing && blackKing.r === 0) {
-                score += 40;
+                score += P.rook7thRankTrappedKingBonus;
             } else {
-                score += 25;
+                score += P.rook7thRankBonus;
             }
         }
     }
     for (const rp of blackRookPositions) {
         if (rp.r === 6) {
             if (whiteKing && whiteKing.r === 7) {
-                score -= 40;
+                score -= P.rook7thRankTrappedKingBonus;
             } else {
-                score -= 25;
+                score -= P.rook7thRankBonus;
             }
         }
     }
@@ -661,7 +725,7 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
             }
             if (connected) break;
         }
-        if (connected) score += 15;
+        if (connected) score += P.rookConnectedBonus;
     }
     // Black Rooks
     if (blackRookPositions.length >= 2) {
@@ -690,7 +754,7 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
             }
             if (connected) break;
         }
-        if (connected) score -= 15;
+        if (connected) score -= P.rookConnectedBonus;
     }
 
     // Bad Bishops Penalty
@@ -703,7 +767,7 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
             }
         }
         if (sameColorPawns >= 4) {
-            score -= (sameColorPawns - 3) * 8;
+            score -= (sameColorPawns - 3) * P.badBishopPawnFactor;
         }
     }
     for (const bPos of blackBishopPositions) {
@@ -715,7 +779,7 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
             }
         }
         if (sameColorPawns >= 4) {
-            score += (sameColorPawns - 3) * 8;
+            score += (sameColorPawns - 3) * P.badBishopPawnFactor;
         }
     }
 
@@ -779,12 +843,12 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
                     const canCastleKing = !board.movedStatus["7,7"];
                     const canCastleQueen = !board.movedStatus["7,0"];
                     if (canCastleKing || canCastleQueen) {
-                        score += 15; // Bonus pour avoir les droits de roquer
+                        score += P.castlingRightsBonus; // Bonus pour avoir les droits de roquer
                     } else {
-                        score -= 25; // Pénalité si droits perdus
+                        score -= P.lostCastlingRightsPenalty; // Pénalité si droits perdus
                     }
                 } else {
-                    score -= 25; // Pénalité si roi a bougé
+                    score -= P.lostCastlingRightsPenalty; // Pénalité si roi a bougé
                 }
                 
                 // Bouclier de pions partiel si le Roi est sur sa rangée de départ
@@ -807,9 +871,9 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
                     if (col >= 0 && col < 8) {
                         if (whitePawnCols[col] === 0) {
                             if (blackPawnCols[col] === 0) {
-                                score -= 25; // Open file next to King
+                                score -= P.openFileKingPenalty; // Open file next to King
                             } else {
-                                score -= 15; // Semi-open file next to King
+                                score -= P.semiOpenFileKingPenalty; // Semi-open file next to King
                             }
                         }
                     }
@@ -847,12 +911,12 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
                     const canCastleKing = !board.movedStatus["0,7"];
                     const canCastleQueen = !board.movedStatus["0,0"];
                     if (canCastleKing || canCastleQueen) {
-                        score -= 15;
+                        score -= P.castlingRightsBonus;
                     } else {
-                        score += 25;
+                        score += P.lostCastlingRightsPenalty;
                     }
                 } else {
-                    score += 25;
+                    score += P.lostCastlingRightsPenalty;
                 }
                 
                 // Bouclier de pions partiel si le Roi est sur sa rangée de départ
@@ -875,9 +939,9 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
                     if (col >= 0 && col < 8) {
                         if (blackPawnCols[col] === 0) {
                             if (whitePawnCols[col] === 0) {
-                                score += 25;
+                                score += P.openFileKingPenalty;
                             } else {
-                                score += 15;
+                                score += P.semiOpenFileKingPenalty;
                             }
                         }
                     }
@@ -938,9 +1002,28 @@ function evaluateBoard(board, depth = 0, style = 'standard') {
     return score;
 }
 
-function minimax(board, depth, alpha, beta, isMaximizing, style = 'standard') {
-    if (depth === 0 || board.isThreefoldRepetition() || board.isFiftyMoveRule() || board.isInsufficientMaterial()) {
-        return evaluateBoard(board, depth, style);
+let searchNodeCount = 0;
+let searchTimeoutTriggered = false;
+
+function checkTimeout(startTime, timeLimit) {
+    searchNodeCount++;
+    if (searchNodeCount % 64 === 0) {
+        if (Date.now() - startTime >= timeLimit) {
+            searchTimeoutTriggered = true;
+            throw new Error('Timeout');
+        }
+    }
+}
+
+function minimax(board, depth, alpha, beta, isMaximizing, style, startTime, timeLimit) {
+    checkTimeout(startTime, timeLimit);
+
+    if (depth === 0) {
+        return quiescence(board, alpha, beta, isMaximizing, style, startTime, timeLimit, 0);
+    }
+    
+    if (board.isThreefoldRepetition() || board.isFiftyMoveRule() || board.isInsufficientMaterial()) {
+        return 0;
     }
 
     const turn = board.turn;
@@ -964,10 +1047,12 @@ function minimax(board, depth, alpha, beta, isMaximizing, style = 'standard') {
     }
 
     if (moves.length === 0) {
-        return evaluateBoard(board, depth, style);
+        if (board.isInCheck(turn)) {
+            return turn === 'b' ? (-99999 - depth) : (99999 + depth);
+        }
+        return 0;
     }
 
-    // Tri des coups pour optimiser l'élagage alpha-beta (captures d'abord)
     moves.sort((a, b) => {
         const aCap = board.grid[a.end.r][a.end.c] !== "" ? 1 : 0;
         const bCap = board.grid[b.end.r][b.end.c] !== "" ? 1 : 0;
@@ -979,7 +1064,7 @@ function minimax(board, depth, alpha, beta, isMaximizing, style = 'standard') {
         for (const move of moves) {
             const nextBoard = board.clone();
             nextBoard.movePiece(move.start, move.end);
-            const evaluation = minimax(nextBoard, depth - 1, alpha, beta, false, style);
+            const evaluation = minimax(nextBoard, depth - 1, alpha, beta, false, style, startTime, timeLimit);
             maxEval = Math.max(maxEval, evaluation);
             alpha = Math.max(alpha, evaluation);
             if (beta <= alpha) {
@@ -992,7 +1077,7 @@ function minimax(board, depth, alpha, beta, isMaximizing, style = 'standard') {
         for (const move of moves) {
             const nextBoard = board.clone();
             nextBoard.movePiece(move.start, move.end);
-            const evaluation = minimax(nextBoard, depth - 1, alpha, beta, true, style);
+            const evaluation = minimax(nextBoard, depth - 1, alpha, beta, true, style, startTime, timeLimit);
             minEval = Math.min(minEval, evaluation);
             beta = Math.min(beta, evaluation);
             if (beta <= alpha) {
@@ -1003,7 +1088,96 @@ function minimax(board, depth, alpha, beta, isMaximizing, style = 'standard') {
     }
 }
 
-function findBestMove(board, depth, style, record) {
+function quiescence(board, alpha, beta, isMaximizing, style, startTime, timeLimit, qDepth) {
+    checkTimeout(startTime, timeLimit);
+
+    const standPat = evaluateBoard(board, 0, style);
+    
+    // Stop search if game is drawn or max quiescence depth reached
+    if (qDepth >= 3 || board.isThreefoldRepetition() || board.isFiftyMoveRule() || board.isInsufficientMaterial()) {
+        return standPat;
+    }
+
+    if (isMaximizing) {
+        if (standPat >= beta) {
+            return standPat;
+        }
+        alpha = Math.max(alpha, standPat);
+        
+        const moves = getCaptureMoves(board);
+        if (moves.length === 0) return standPat;
+
+        // Sort captures: MVV-LVA simplified (captured piece value)
+        moves.sort((a, b) => {
+            const aVal = PIECE_VALUES[board.grid[a.end.r][a.end.c][0]] || 0;
+            const bVal = PIECE_VALUES[board.grid[b.end.r][b.end.c][0]] || 0;
+            return bVal - aVal;
+        });
+
+        for (const move of moves) {
+            const nextBoard = board.clone();
+            nextBoard.movePiece(move.start, move.end);
+            const evaluation = quiescence(nextBoard, alpha, beta, false, style, startTime, timeLimit, qDepth + 1);
+            alpha = Math.max(alpha, evaluation);
+            if (beta <= alpha) {
+                break;
+            }
+        }
+        return alpha;
+    } else {
+        if (standPat <= alpha) {
+            return standPat;
+        }
+        beta = Math.min(beta, standPat);
+
+        const moves = getCaptureMoves(board);
+        if (moves.length === 0) return standPat;
+
+        moves.sort((a, b) => {
+            const aVal = PIECE_VALUES[board.grid[a.end.r][a.end.c][0]] || 0;
+            const bVal = PIECE_VALUES[board.grid[b.end.r][b.end.c][0]] || 0;
+            return bVal - aVal;
+        });
+
+        for (const move of moves) {
+            const nextBoard = board.clone();
+            nextBoard.movePiece(move.start, move.end);
+            const evaluation = quiescence(nextBoard, alpha, beta, true, style, startTime, timeLimit, qDepth + 1);
+            beta = Math.min(beta, evaluation);
+            if (beta <= alpha) {
+                break;
+            }
+        }
+        return beta;
+    }
+}
+
+function getCaptureMoves(board) {
+    const turn = board.turn;
+    const pieces = [];
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const piece = board.grid[r][c];
+            if (piece !== "" && piece[1] === turn) {
+                pieces.push({ r, c });
+            }
+        }
+    }
+    const captureMoves = [];
+    for (const p of pieces) {
+        const validEnds = board.getValidMoves(p);
+        for (const end of validEnds) {
+            const isNormalCapture = board.grid[end.r][end.c] !== "";
+            const isEnPassant = board.enPassantTarget && end.r === board.enPassantTarget.r && end.c === board.enPassantTarget.c && board.grid[p.r][p.c][0] === 'p';
+            if (isNormalCapture || isEnPassant) {
+                captureMoves.push({ start: p, end });
+            }
+        }
+    }
+    return captureMoves;
+}
+
+function findBestMoveAtDepth(board, depth, style, record, startTime, timeLimit, previousBestMove) {
     const turn = board.turn;
     const isMaximizing = turn === 'b';
     let bestMove = null;
@@ -1031,30 +1205,42 @@ function findBestMove(board, depth, style, record) {
         return { bestMove: null, bestValue: evaluateBoard(board, depth, style) };
     }
 
+    // Sort moves to maximize alpha-beta pruning speed:
+    // 1. Previous best move (PV move) goes first!
+    // 2. Capture moves
+    // 3. Normal moves
     moves.sort((a, b) => {
+        if (previousBestMove) {
+            const aIsPrev = (a.start.r === previousBestMove.start.r && a.start.c === previousBestMove.start.c &&
+                             a.end.r === previousBestMove.end.r && a.end.c === previousBestMove.end.c);
+            const bIsPrev = (b.start.r === previousBestMove.start.r && b.start.c === previousBestMove.start.c &&
+                             b.end.r === previousBestMove.end.r && b.end.c === previousBestMove.end.c);
+            if (aIsPrev) return -1;
+            if (bIsPrev) return 1;
+        }
+        
         const aCap = board.grid[a.end.r][a.end.c] !== "" ? 1 : 0;
         const bCap = board.grid[b.end.r][b.end.c] !== "" ? 1 : 0;
-        return bCap - aCap;
+        if (aCap !== bCap) return bCap - aCap;
+        
+        return 0;
     });
 
     for (const move of moves) {
+        checkTimeout(startTime, timeLimit);
+
         const nextBoard = board.clone();
         nextBoard.movePiece(move.start, move.end);
         
-        // Ajouter un petit bruit aléatoire (de -6 à +6 centipions) pour introduire de la variété
-        // dans les ouvertures et éviter que l'IA ne joue toujours la même partie.
-        const noise = (Math.random() - 0.5) * 12;
+        const noise = (Math.random() - 0.5) * 6; // noise to avoid playing identical games
 
-        // Intégrer les Q-values apprises sous forme de bonus/malus à l'évaluation minimax brute.
         const moveKey = `${move.start.r},${move.start.c}-${move.end.r},${move.end.c}`;
         let qBonus = 0;
         if (record && record.moves && record.moves[moveKey]) {
-            // Un Q-value de +1.0 vaut +150 centipions de bonus.
-            // Un Q-value de -1.0 vaut -150 centipions de malus.
             qBonus = record.moves[moveKey].q * 150;
         }
 
-        let val = minimax(nextBoard, depth - 1, -Infinity, Infinity, !isMaximizing, style) + noise;
+        let val = minimax(nextBoard, depth - 1, -Infinity, Infinity, !isMaximizing, style, startTime, timeLimit) + noise;
         if (isMaximizing) {
             val += qBonus;
         } else {
@@ -1084,39 +1270,32 @@ async function learnFromGame(gameHistory, result) {
         const learningRate = 0.2;
         const discountFactor = 0.9;
         
-        // On apprend uniquement sur l'ouverture / milieu de jeu précoce (les 24 premiers plis / 12 coups)
         const maxPlies = Math.min(gameHistory.length, 24);
-
-        // Précalculer toutes les tâches pour passer le minimum de temps dans la transaction IndexedDB
         const tasks = [];
         for (let t = 0; t < maxPlies; t++) {
             const historyEntry = gameHistory[t];
             const boardState = historyEntry.boardState;
             const move = { start: historyEntry.start, end: historyEntry.end };
             
-            // Recréer le plateau pour obtenir la signature de cette position
             const tempBoard = new Board();
             tempBoard.loadState(boardState);
             const signature = tempBoard.getPositionSignature();
             const moveKey = `${move.start.r},${move.start.c}-${move.end.r},${move.end.c}`;
             
-            // Déterminer la récompense pour le joueur dont c'était le tour
-            const activeColor = boardState.turn; // 'b' ou 'n'
+            const activeColor = boardState.turn;
             let reward = 0;
             if (result === activeColor) {
-                reward = 1.0; // Victoire
+                reward = 1.0;
             } else if (result !== null) {
-                reward = -1.0; // Défaite
+                reward = -1.0;
             } else {
-                reward = 0.0; // Match nul
+                reward = 0.0;
             }
             
-            // Appliquer l'escompte temporel (les coups les plus récents sont plus directement responsables)
             const discountedReward = reward * Math.pow(discountFactor, maxPlies - 1 - t);
             tasks.push({ signature, moveKey, discountedReward });
         }
 
-        // Ouvrir une seule transaction pour toutes les lectures et écritures
         const transaction = db.transaction([STORE_NAME], "readwrite");
         const store = transaction.objectStore(STORE_NAME);
 
@@ -1139,7 +1318,6 @@ async function learnFromGame(gameHistory, result) {
                 updatedRecord.moves[task.moveKey] = { q: 0.0, count: 0 };
             }
 
-            // Formule de mise à jour Q-learning simple
             const qData = updatedRecord.moves[task.moveKey];
             qData.q = qData.q + learningRate * (task.discountedReward - qData.q);
             qData.count += 1;
@@ -1157,12 +1335,481 @@ async function learnFromGame(gameHistory, result) {
         });
 
         console.log(`[IA] L'IA a appris de la partie (${maxPlies} demi-coups enregistrés dans le livre via une transaction unique).`);
+
+        // Appliquer TD-Learning pour ajuster dynamiquement les paramètres positionnels
+        await adjustWeights(gameHistory, result);
+
     } catch (e) {
         console.error("Erreur lors de l'apprentissage de l'IA :", e);
     }
 }
 
-async function runSearch(board, depth, style, useLearning) {
+// --- TEMPORAL DIFFERENCE LEARNING : AJUSTEMENT DYNAMIQUE DES PARAMÈTRES POSITIONNELS ---
+async function adjustWeights(gameHistory, result) {
+    try {
+        const db = await openDB();
+        let record = await getRecord(db, "global_weights");
+        let weights = record ? record.weights : { ...DEFAULT_EVAL_PARAMS };
+        
+        const lr = 0.05;
+        const outcome = result === 'b' ? 1.0 : (result === 'n' ? -1.0 : 0.0);
+        
+        if (outcome === 0) {
+            // Decay weights back to default slowly to avoid excessive drift on draws
+            for (const key in weights) {
+                weights[key] = weights[key] + 0.02 * (DEFAULT_EVAL_PARAMS[key] - weights[key]);
+            }
+        } else {
+            const startPly = Math.max(0, gameHistory.length - 40);
+            const endPly = gameHistory.length;
+            
+            for (let t = startPly; t < endPly; t++) {
+                const boardState = gameHistory[t].boardState;
+                const tempBoard = new Board();
+                tempBoard.loadState(boardState);
+                
+                const features = extractFeatures(tempBoard);
+                
+                const adjustBonus = (key, whiteVal, blackVal) => {
+                    const diff = whiteVal - blackVal;
+                    weights[key] += lr * diff * outcome * 0.1;
+                    weights[key] = Math.max(DEFAULT_EVAL_PARAMS[key] * 0.5, Math.min(DEFAULT_EVAL_PARAMS[key] * 1.5, weights[key]));
+                };
+                
+                const adjustPenalty = (key, whiteVal, blackVal) => {
+                    const diff = whiteVal - blackVal;
+                    weights[key] -= lr * diff * outcome * 0.1;
+                    weights[key] = Math.max(DEFAULT_EVAL_PARAMS[key] * 0.5, Math.min(DEFAULT_EVAL_PARAMS[key] * 1.5, weights[key]));
+                };
+                
+                adjustBonus('bishopPairBonus', features.whiteBishops >= 2 ? 1 : 0, features.blackBishops >= 2 ? 1 : 0);
+                adjustBonus('pawnConnectedBonus', features.whiteConnectedPawns, features.blackConnectedPawns);
+                adjustBonus('pawnPassedBonusMultiplier', features.whitePassedPawns, features.blackPassedPawns);
+                adjustBonus('pawnForkBonus', features.whitePawnForks, features.blackPawnForks);
+                adjustBonus('knightForkBonus', features.whiteKnightForks, features.blackKnightForks);
+                adjustBonus('rookTarraschBonus', features.whiteRookTarrasch, features.blackRookTarrasch);
+                adjustBonus('rook7thRankBonus', features.whiteRook7th, features.blackRook7th);
+                adjustBonus('rookConnectedBonus', features.whiteRooksConnected ? 1 : 0, features.blackRooksConnected ? 1 : 0);
+                adjustBonus('knightOutpostBonus', features.whiteKnightOutposts, features.blackKnightOutposts);
+                adjustBonus('centerControlBonus', features.whiteCenterControl, features.blackCenterControl);
+                adjustBonus('defendedByPawnBonus', features.whiteDefendedByPawn, features.blackDefendedByPawn);
+                adjustBonus('castlingRightsBonus', features.whiteCastlingRights ? 1 : 0, features.blackCastlingRights ? 1 : 0);
+                
+                adjustPenalty('pawnDoubledPenalty', features.whiteDoubledPawns, features.blackDoubledPawns);
+                adjustPenalty('pawnIsolatedPenalty', features.whiteIsolatedPawns, features.blackIsolatedPawns);
+                adjustPenalty('pawnBlockadePenalty', features.whiteBlockadedPassed, features.blackBlockadedPassed);
+                adjustPenalty('badBishopPawnFactor', features.whiteBadBishopPawns, features.blackBadBishopPawns);
+                adjustPenalty('undevelopedMinorPenalty', features.whiteUndevelopedMinors, features.blackUndevelopedMinors);
+                adjustPenalty('queenEarlyPenalty', features.whiteEarlyQueen ? 1 : 0, features.blackEarlyQueen ? 1 : 0);
+                adjustPenalty('openFileKingPenalty', features.whiteKingOpenFiles, features.blackKingOpenFiles);
+                adjustPenalty('semiOpenFileKingPenalty', features.whiteKingSemiOpenFiles, features.blackKingSemiOpenFiles);
+                adjustPenalty('lostCastlingRightsPenalty', features.whiteLostCastlingRights ? 1 : 0, features.blackLostCastlingRights ? 1 : 0);
+            }
+        }
+        
+        await putRecord(db, { signature: "global_weights", weights });
+        EVAL_PARAMS = weights;
+        console.log("[IA] Apprentissage TD-learning appliqué avec succès aux paramètres positionnels.");
+    } catch (e) {
+        console.error("Erreur lors de l'ajustement TD-Learning :", e);
+    }
+}
+
+function extractFeatures(board) {
+    let whiteKing = null;
+    let blackKing = null;
+    let whiteQueenPos = null;
+    let blackQueenPos = null;
+    let whiteMaterial = 0;
+    let blackMaterial = 0;
+    let whiteBishops = 0;
+    let blackBishops = 0;
+    
+    const whiteBishopPositions = [];
+    const blackBishopPositions = [];
+    const whiteKnightPositions = [];
+    const blackKnightPositions = [];
+    const whiteRookPositions = [];
+    const blackRookPositions = [];
+    
+    const whitePawnCols = Array(8).fill(0);
+    const blackPawnCols = Array(8).fill(0);
+    const whitePawns = [];
+    const blackPawns = [];
+
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const piece = board.grid[r][c];
+            if (piece !== "") {
+                const type = piece[0];
+                const color = piece[1];
+                let val = PIECE_VALUES[type] || 0;
+                
+                if (type === 'r') {
+                    if (color === 'b') whiteKing = { r, c };
+                    else blackKing = { r, c };
+                } else {
+                    if (color === 'b') {
+                        whiteMaterial += val;
+                        if (type === 'd') whiteQueenPos = { r, c };
+                        if (type === 'f') { whiteBishops++; whiteBishopPositions.push({ r, c }); }
+                        if (type === 'c') whiteKnightPositions.push({ r, c });
+                        if (type === 't') whiteRookPositions.push({ r, c });
+                        if (type === 'p') { whitePawnCols[c]++; whitePawns.push({ r, c }); }
+                    } else {
+                        blackMaterial += val;
+                        if (type === 'd') blackQueenPos = { r, c };
+                        if (type === 'f') { blackBishops++; blackBishopPositions.push({ r, c }); }
+                        if (type === 'c') blackKnightPositions.push({ r, c });
+                        if (type === 't') blackRookPositions.push({ r, c });
+                        if (type === 'p') { blackPawnCols[c]++; blackPawns.push({ r, c }); }
+                    }
+                }
+            }
+        }
+    }
+
+    const f = {
+        whiteBishops, blackBishops,
+        whiteConnectedPawns: 0, blackConnectedPawns: 0,
+        whitePassedPawns: 0, blackPassedPawns: 0,
+        whitePawnForks: 0, blackPawnForks: 0,
+        whiteKnightForks: 0, blackKnightForks: 0,
+        whiteRookTarrasch: 0, blackRookTarrasch: 0,
+        whiteRook7th: 0, blackRook7th: 0,
+        whiteRooksConnected: false, blackRooksConnected: false,
+        whiteKnightOutposts: 0, blackKnightOutposts: 0,
+        whiteCenterControl: 0, blackCenterControl: 0,
+        whiteDefendedByPawn: 0, blackDefendedByPawn: 0,
+        whiteCastlingRights: false, blackCastlingRights: false,
+        whiteLostCastlingRights: false, blackLostCastlingRights: false,
+        
+        whiteDoubledPawns: 0, blackDoubledPawns: 0,
+        whiteIsolatedPawns: 0, blackIsolatedPawns: 0,
+        whiteBlockadedPassed: 0, blackBlockadedPassed: 0,
+        whiteBadBishopPawns: 0, blackBadBishopPawns: 0,
+        whiteUndevelopedMinors: 0, blackUndevelopedMinors: 0,
+        whiteEarlyQueen: false, blackEarlyQueen: false,
+        whiteKingOpenFiles: 0, blackKingOpenFiles: 0,
+        whiteKingSemiOpenFiles: 0, blackKingSemiOpenFiles: 0
+    };
+
+    for (const pawn of whitePawns) {
+        const c = pawn.c;
+        const r = pawn.r;
+        if (whitePawnCols[c] > 1) f.whiteDoubledPawns++;
+        if ((c === 0 || whitePawnCols[c - 1] === 0) && (c === 7 || whitePawnCols[c + 1] === 0)) f.whiteIsolatedPawns++;
+        
+        let isConnected = false;
+        if (c > 0 && (board.grid[r][c - 1] === 'pb' || (r + 1 < 8 && board.grid[r + 1][c - 1] === 'pb'))) isConnected = true;
+        if (c < 7 && (board.grid[r][c + 1] === 'pb' || (r + 1 < 8 && board.grid[r + 1][c + 1] === 'pb'))) isConnected = true;
+        if (isConnected) f.whiteConnectedPawns++;
+
+        let isPassed = true;
+        for (let nextR = r - 1; nextR >= 0; nextR--) {
+            if (board.grid[nextR][c] === 'pn' || (c > 0 && board.grid[nextR][c - 1] === 'pn') || (c < 7 && board.grid[nextR][c + 1] === 'pn')) {
+                isPassed = false; break;
+            }
+        }
+        if (isPassed) {
+            f.whitePassedPawns++;
+            if (r - 1 >= 0 && board.grid[r - 1][c] !== "") f.whiteBlockadedPassed++;
+            for (let checkR = r + 1; checkR < 8; checkR++) {
+                if (board.grid[checkR][c] === 'tb') { f.whiteRookTarrasch++; break; }
+                if (board.grid[checkR][c] !== "") break;
+            }
+        }
+
+        let targets = 0;
+        for (const dc of [-1, 1]) {
+            const nr = r - 1;
+            const nc = c + dc;
+            if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                const tp = board.grid[nr][nc];
+                if (tp !== "" && tp[1] === 'n' && ['c', 'f', 't', 'd', 'r'].includes(tp[0])) targets++;
+            }
+        }
+        if (targets >= 2) f.whitePawnForks++;
+    }
+
+    for (const pawn of blackPawns) {
+        const c = pawn.c;
+        const r = pawn.r;
+        if (blackPawnCols[c] > 1) f.blackDoubledPawns++;
+        if ((c === 0 || blackPawnCols[c - 1] === 0) && (c === 7 || blackPawnCols[c + 1] === 0)) f.blackIsolatedPawns++;
+        
+        let isConnected = false;
+        if (c > 0 && (board.grid[r][c - 1] === 'pn' || (r - 1 >= 0 && board.grid[r - 1][c - 1] === 'pn'))) isConnected = true;
+        if (c < 7 && (board.grid[r][c + 1] === 'pn' || (r - 1 >= 0 && board.grid[r - 1][c + 1] === 'pn'))) isConnected = true;
+        if (isConnected) f.blackConnectedPawns++;
+
+        let isPassed = true;
+        for (let nextR = r + 1; nextR < 8; nextR++) {
+            if (board.grid[nextR][c] === 'pb' || (c > 0 && board.grid[nextR][c - 1] === 'pb') || (c < 7 && board.grid[nextR][c + 1] === 'pb')) {
+                isPassed = false; break;
+            }
+        }
+        if (isPassed) {
+            f.blackPassedPawns++;
+            if (r + 1 < 8 && board.grid[r + 1][c] !== "") f.blackBlockadedPassed++;
+            for (let checkR = r - 1; checkR >= 0; checkR--) {
+                if (board.grid[checkR][c] === 'tn') { f.blackRookTarrasch++; break; }
+                if (board.grid[checkR][c] !== "") break;
+            }
+        }
+
+        let targets = 0;
+        for (const dc of [-1, 1]) {
+            const nr = r + 1;
+            const nc = c + dc;
+            if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                const tp = board.grid[nr][nc];
+                if (tp !== "" && tp[1] === 'b' && ['c', 'f', 't', 'd', 'r'].includes(tp[0])) targets++;
+            }
+        }
+        if (targets >= 2) f.blackPawnForks++;
+    }
+
+    for (const kp of whiteKnightPositions) {
+        let targets = 0;
+        for (const [dr, dc] of knightMoves) {
+            const nr = kp.r + dr;
+            const nc = kp.c + dc;
+            if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                const tp = board.grid[nr][nc];
+                if (tp !== "" && tp[1] === 'n' && ['t', 'd', 'r', 'f', 'c'].includes(tp[0])) targets++;
+            }
+        }
+        if (targets >= 2) f.whiteKnightForks++;
+
+        if (kp.r >= 2 && kp.r <= 4) {
+            let defended = false;
+            if (kp.r + 1 < 8) {
+                if (kp.c - 1 >= 0 && board.grid[kp.r + 1][kp.c - 1] === 'pb') defended = true;
+                if (kp.c + 1 < 8 && board.grid[kp.r + 1][kp.c + 1] === 'pb') defended = true;
+            }
+            if (defended) {
+                let attacked = false;
+                for (const col of [kp.c - 1, kp.c + 1]) {
+                    if (col >= 0 && col < 8) {
+                        for (let row = 0; row < kp.r; row++) {
+                            if (board.grid[row][col] === 'pn') { attacked = true; break; }
+                        }
+                    }
+                    if (attacked) break;
+                }
+                if (!attacked) f.whiteKnightOutposts++;
+            }
+        }
+    }
+
+    for (const kp of blackKnightPositions) {
+        let targets = 0;
+        for (const [dr, dc] of knightMoves) {
+            const nr = kp.r + dr;
+            const nc = kp.c + dc;
+            if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+                const tp = board.grid[nr][nc];
+                if (tp !== "" && tp[1] === 'b' && ['t', 'd', 'r', 'f', 'c'].includes(tp[0])) targets++;
+            }
+        }
+        if (targets >= 2) f.blackKnightForks++;
+
+        if (kp.r >= 3 && kp.r <= 5) {
+            let defended = false;
+            if (kp.r - 1 >= 0) {
+                if (kp.c - 1 >= 0 && board.grid[kp.r - 1][kp.c - 1] === 'pn') defended = true;
+                if (kp.c + 1 < 8 && board.grid[kp.r - 1][kp.c + 1] === 'pn') defended = true;
+            }
+            if (defended) {
+                let attacked = false;
+                for (const col of [kp.c - 1, kp.c + 1]) {
+                    if (col >= 0 && col < 8) {
+                        for (let row = kp.r + 1; row < 8; row++) {
+                            if (board.grid[row][col] === 'pb') { attacked = true; break; }
+                        }
+                    }
+                    if (attacked) break;
+                }
+                if (!attacked) f.blackKnightOutposts++;
+            }
+        }
+    }
+
+    for (const rp of whiteRookPositions) {
+        if (rp.r === 1) f.whiteRook7th++;
+    }
+    for (const rp of blackRookPositions) {
+        if (rp.r === 6) f.blackRook7th++;
+    }
+
+    if (whiteRookPositions.length >= 2) {
+        let connected = false;
+        for (let i = 0; i < whiteRookPositions.length; i++) {
+            for (let j = i + 1; j < whiteRookPositions.length; j++) {
+                const r1 = whiteRookPositions[i];
+                const r2 = whiteRookPositions[j];
+                if (r1.r === r2.r) {
+                    let clear = true;
+                    for (let checkC = Math.min(r1.c, r2.c) + 1; checkC < Math.max(r1.c, r2.c); checkC++) {
+                        if (board.grid[r1.r][checkC] !== "") { clear = false; break; }
+                    }
+                    if (clear) { connected = true; break; }
+                } else if (r1.c === r2.c) {
+                    let clear = true;
+                    for (let checkR = Math.min(r1.r, r2.r) + 1; checkR < Math.max(r1.r, r2.r); checkR++) {
+                        if (board.grid[checkR][r1.c] !== "") { clear = false; break; }
+                    }
+                    if (clear) { connected = true; break; }
+                }
+            }
+            if (connected) break;
+        }
+        f.whiteRooksConnected = connected;
+    }
+    if (blackRookPositions.length >= 2) {
+        let connected = false;
+        for (let i = 0; i < blackRookPositions.length; i++) {
+            for (let j = i + 1; j < blackRookPositions.length; j++) {
+                const r1 = blackRookPositions[i];
+                const r2 = blackRookPositions[j];
+                if (r1.r === r2.r) {
+                    let clear = true;
+                    for (let checkC = Math.min(r1.c, r2.c) + 1; checkC < Math.max(r1.c, r2.c); checkC++) {
+                        if (board.grid[r1.r][checkC] !== "") { clear = false; break; }
+                    }
+                    if (clear) { connected = true; break; }
+                } else if (r1.c === r2.c) {
+                    let clear = true;
+                    for (let checkR = Math.min(r1.r, r2.r) + 1; checkR < Math.max(r1.r, r2.r); checkR++) {
+                        if (board.grid[checkR][r1.c] !== "") { clear = false; break; }
+                    }
+                    if (clear) { connected = true; break; }
+                }
+            }
+            if (connected) break;
+        }
+        f.blackRooksConnected = connected;
+    }
+
+    for (const bPos of whiteBishopPositions) {
+        const bishopColor = (bPos.r + bPos.c) % 2;
+        let count = 0;
+        for (const p of whitePawns) {
+            if ((p.r + p.c) % 2 === bishopColor) count++;
+        }
+        if (count >= 4) f.whiteBadBishopPawns += (count - 3);
+    }
+    for (const bPos of blackBishopPositions) {
+        const bishopColor = (bPos.r + bPos.c) % 2;
+        let count = 0;
+        for (const p of blackPawns) {
+            if ((p.r + p.c) % 2 === bishopColor) count++;
+        }
+        if (count >= 4) f.blackBadBishopPawns += (count - 3);
+    }
+
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const piece = board.grid[r][c];
+            if (piece !== "") {
+                const type = piece[0];
+                const color = piece[1];
+                if (type === 'p' || type === 'c' || type === 'f') {
+                    if (attacksCenter(r, c, type, color, board)) {
+                        if (color === 'b') f.whiteCenterControl++;
+                        else f.blackCenterControl++;
+                    }
+                }
+                
+                if (type !== 'p' && type !== 'r') {
+                    let defended = false;
+                    if (color === 'b') {
+                        if (r + 1 < 8) {
+                            if ((c - 1 >= 0 && board.grid[r + 1][c - 1] === 'pb') || (c + 1 < 8 && board.grid[r + 1][c + 1] === 'pb')) defended = true;
+                        }
+                    } else {
+                        if (r - 1 >= 0) {
+                            if ((c - 1 >= 0 && board.grid[r - 1][c - 1] === 'pn') || (c + 1 < 8 && board.grid[r - 1][c + 1] === 'pn')) defended = true;
+                        }
+                    }
+                    if (defended) {
+                        if (color === 'b') f.whiteDefendedByPawn++;
+                        else f.blackDefendedByPawn++;
+                    }
+                }
+            }
+        }
+    }
+
+    if (board.grid[7][1] === 'cb') f.whiteUndevelopedMinors++;
+    if (board.grid[7][6] === 'cb') f.whiteUndevelopedMinors++;
+    if (board.grid[7][2] === 'fb') f.whiteUndevelopedMinors++;
+    if (board.grid[7][5] === 'fb') f.whiteUndevelopedMinors++;
+
+    if (board.grid[0][1] === 'cn') f.blackUndevelopedMinors++;
+    if (board.grid[0][6] === 'cn') f.blackUndevelopedMinors++;
+    if (board.grid[0][2] === 'fn') f.blackUndevelopedMinors++;
+    if (board.grid[0][5] === 'fn') f.blackUndevelopedMinors++;
+
+    if (whiteQueenPos && (whiteQueenPos.r !== 7 || whiteQueenPos.c !== 3) && f.whiteUndevelopedMinors >= 2) f.whiteEarlyQueen = true;
+    if (blackQueenPos && (blackQueenPos.r !== 0 || blackQueenPos.c !== 3) && f.blackUndevelopedMinors >= 2) f.blackEarlyQueen = true;
+
+    if (!isEnd) {
+        const isWhiteCastled = whiteKing && whiteKing.r === 7 && (whiteKing.c === 6 || whiteKing.c === 2);
+        if (!isWhiteCastled && whiteKing) {
+            const hasMoved = board.movedStatus["7,4"];
+            if (!hasMoved) {
+                const canK = !board.movedStatus["7,7"];
+                const canQ = !board.movedStatus["7,0"];
+                if (canK || canQ) f.whiteCastlingRights = true;
+                else f.whiteLostCastlingRights = true;
+            } else {
+                f.whiteLostCastlingRights = true;
+            }
+        }
+        
+        const isBlackCastled = blackKing && blackKing.r === 0 && (blackKing.c === 6 || blackKing.c === 2);
+        if (!isBlackCastled && blackKing) {
+            const hasMoved = board.movedStatus["0,4"];
+            if (!hasMoved) {
+                const canK = !board.movedStatus["0,7"];
+                const canQ = !board.movedStatus["0,0"];
+                if (canK || canQ) f.blackCastlingRights = true;
+                else f.blackLostCastlingRights = true;
+            } else {
+                f.blackLostCastlingRights = true;
+            }
+        }
+
+        if (whiteKing && (isWhiteCastled || whiteKing.r === 7)) {
+            for (let dc = -1; dc <= 1; dc++) {
+                const col = whiteKing.c + dc;
+                if (col >= 0 && col < 8) {
+                    if (whitePawnCols[col] === 0) {
+                        if (blackPawnCols[col] === 0) f.whiteKingOpenFiles++;
+                        else f.whiteKingSemiOpenFiles++;
+                    }
+                }
+            }
+        }
+        if (blackKing && (isBlackCastled || blackKing.r === 0)) {
+            for (let dc = -1; dc <= 1; dc++) {
+                const col = blackKing.c + dc;
+                if (col >= 0 && col < 8) {
+                    if (blackPawnCols[col] === 0) {
+                        if (whitePawnCols[col] === 0) f.blackKingOpenFiles++;
+                        else f.blackKingSemiOpenFiles++;
+                    }
+                }
+            }
+        }
+    }
+
+    return f;
+}
+
+async function runSearch(board, maxDepth, style, useLearning) {
     try {
         let bestMove = null;
         let record = null;
@@ -1177,7 +1824,6 @@ async function runSearch(board, depth, style, useLearning) {
                 record = await getRecord(db, currentSignature);
                 
                 if (record && record.moves) {
-                    // Trouver tous nos coups légaux pour s'assurer que le coup appris est toujours valide
                     const validMoves = [];
                     const pieces = [];
                     for (let r = 0; r < ROWS; r++) {
@@ -1207,7 +1853,6 @@ async function runSearch(board, depth, style, useLearning) {
                         }
                     }
                     
-                    // Si on a un bon coup connu (Q > 0.05) et selon le taux d'exploitation de 85%
                     if (bestLearnedMove && bestQ > 0.05 && Math.random() < 0.85) {
                         console.log(`[IA] Coup joué du livre d'ouvertures (Q-value: ${bestQ.toFixed(2)}): ${bestLearnedMove.key}`);
                         bestMove = { start: bestLearnedMove.start, end: bestLearnedMove.end };
@@ -1220,10 +1865,64 @@ async function runSearch(board, depth, style, useLearning) {
         }
         
         if (!bestMove) {
-            const searchResult = findBestMove(board, depth || 3, style, record);
-            if (searchResult) {
-                bestMove = searchResult.bestMove;
-                bestValue = searchResult.bestValue;
+            console.log(`[Worker] Coup non trouvé dans le livre d'ouvertures. Début recherche Minimax brute force...`);
+            const startTime = Date.now();
+            const timeLimit = 4500; // 4.5 seconds safety limit
+            
+            searchNodeCount = 0;
+            searchTimeoutTriggered = false;
+            
+            let previousBestMove = null;
+            let lastCompletedBestMove = null;
+            let lastCompletedBestValue = 0;
+            
+            for (let d = 1; d <= (maxDepth || 3); d++) {
+                try {
+                    console.log(`[Worker] Minimax Profondeur ${d} en cours...`);
+                    const result = findBestMoveAtDepth(board, d, style, record, startTime, timeLimit, previousBestMove);
+                    if (result && !searchTimeoutTriggered) {
+                        lastCompletedBestMove = result.bestMove;
+                        lastCompletedBestValue = result.bestValue;
+                        previousBestMove = result.bestMove; // use as PV move in next iteration
+                        console.log(`[Worker] Profondeur ${d} terminée. Meilleur coup: ${lastCompletedBestMove ? `${lastCompletedBestMove.start.r},${lastCompletedBestMove.start.c}-${lastCompletedBestMove.end.r},${lastCompletedBestMove.end.c}` : 'aucun'}, val: ${lastCompletedBestValue}`);
+                    }
+                } catch (err) {
+                    if (err.message === 'Timeout') {
+                        console.log(`[IA] Iterative Deepening interrompu par limite de temps à la profondeur ${d}.`);
+                        break;
+                    } else {
+                        console.error(`[Worker] Erreur à la profondeur ${d} :`, err);
+                        throw err;
+                    }
+                }
+            }
+            
+            bestMove = lastCompletedBestMove;
+            bestValue = lastCompletedBestValue;
+            
+            if (!bestMove) {
+                // Fallback de sécurité au cas où la profondeur 1 a expiré ou a échoué
+                const pieces = [];
+                for (let r = 0; r < ROWS; r++) {
+                    for (let c = 0; c < COLS; c++) {
+                        const piece = board.grid[r][c];
+                        if (piece !== "" && piece[1] === turn) {
+                            pieces.push({ r, c });
+                        }
+                    }
+                }
+                const fallbackMoves = [];
+                for (const p of pieces) {
+                    const validEnds = board.getValidMoves(p);
+                    for (const end of validEnds) {
+                        fallbackMoves.push({ start: p, end });
+                    }
+                }
+                if (fallbackMoves.length > 0) {
+                    bestMove = fallbackMoves[Math.floor(Math.random() * fallbackMoves.length)];
+                    bestValue = evaluateBoard(board, 0, style);
+                    console.log(`[IA] Recherche interrompue prématurément, repli de sécurité sur un coup aléatoire : ${bestMove.start.r},${bestMove.start.c}-${bestMove.end.r},${bestMove.end.c}`);
+                }
             }
         }
         
@@ -1235,6 +1934,15 @@ async function runSearch(board, depth, style, useLearning) {
 
 self.onmessage = async function (e) {
     const { type, boardState, depth, style, useLearning, gameHistory, result } = e.data;
+    console.log(`[Worker] Message reçu de type "${type}". Style: ${style}, Profondeur: ${depth}, Apprentissage: ${useLearning}`);
+    
+    try {
+        console.log("[Worker] Initialisation des poids...");
+        await initWeights();
+        console.log("[Worker] Poids initialisés avec succès. EVAL_PARAMS est chargé.");
+    } catch (err) {
+        console.error("[Worker] Erreur lors de initWeights :", err);
+    }
     
     if (type === 'ping') {
         self.postMessage({ type: 'pong' });
@@ -1243,16 +1951,20 @@ self.onmessage = async function (e) {
     
     if (type === 'search') {
         try {
+            console.log("[Worker] Démarrage de la recherche...");
             const board = new Board();
             board.loadState(boardState);
+            console.log("[Worker] État du plateau chargé avec succès. turn =", board.turn);
             await runSearch(board, depth, style, useLearning);
         } catch (error) {
+            console.error("[Worker] Erreur fatale dans runSearch :", error);
             self.postMessage({ type: 'searchResult', success: false, error: error.message });
         }
     }
     
     if (type === 'learn') {
         try {
+            console.log("[Worker] Démarrage de l'apprentissage post-partie...");
             await learnFromGame(gameHistory, result);
             self.postMessage({ type: 'learnComplete', success: true });
         } catch (error) {

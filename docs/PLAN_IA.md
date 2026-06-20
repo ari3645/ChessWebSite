@@ -63,13 +63,13 @@ Concevoir une IA performante (niveau amateur fort / club, estimé à 1600-1900 E
     - **Fourchettes (Forks) tactiques** : Détection des fourchettes de pion et cavalier.
     - **Centralisation du Roi en finale** : Transition automatique vers le centre dès que le matériel non-pion tombe sous 1500 cp.
 
-### 🟢 Étape 3 : Module d'Apprentissage & Persistance (En cours)
+### 🟢 Étape 3 : Module d'Apprentissage & Persistance (Terminée)
 - [x] **Persistance IndexedDB** : Initialisation d'une base de données locale dans le navigateur pour stocker les modèles appris.
 - [x] **Livre d'Ouvertures Dynamique (Q-learning)** :
     - L'IA enregistre les états de début de partie (jusqu'au coup 12).
     - Elle attribue une note (Q-value) à chaque coup joué en fonction du résultat final.
     - Au fil des parties, elle apprend à jouer de meilleures ouvertures et à éviter les pièges.
-- [ ] **Ajustement Positionnel (TD-learning / Différence Temporelle)** :
+- [x] **Ajustement Positionnel (TD-learning / Différence Temporelle)** :
     - Les poids de la fonction d'évaluation s'ajustent de manière adaptative selon les fins de parties.
 
 ### 🔵 Étape 4 : Améliorations de Jeu & Styles (Partiellement Terminée)
@@ -77,6 +77,6 @@ Concevoir une IA performante (niveau amateur fort / club, estimé à 1600-1900 E
     - *IA Défensive* : Focus sur le bouclier de pions et maintien du Roi à l'abri.
     - *IA Testeuse (Agressive)* : Avancement des pièces, proximité du Roi adverse, et Pawn Storm (poussée des pions de l'aile du Roi adverse).
 - [x] **Affichage asynchrone des évaluations réelles** en centipions pour chaque IA à côté de leur badge nominatif.
-- [ ] **Recherche de Calme (Quiescence Search)** : Résolution de l'effet d'horizon en prolongeant l'analyse tant qu'il y a des captures/échecs en suspens.
-- [ ] **Iterative Deepening** : Permettre à l'IA de gérer son temps de réflexion de façon adaptative.
+- [x] **Recherche de Calme (Quiescence Search)** : Résolution de l'effet d'horizon en prolongeant l'analyse tant qu'il y a des captures/échecs en suspens.
+- [x] **Iterative Deepening** : Permettre à l'IA de gérer son temps de réflexion de façon progressive et adaptative (avec coupure de sécurité à 5 secondes max).
 - [ ] **Gestion Adaptative du Temps (Time Management)** : Permettre à l'IA d'adapter sa profondeur de recherche selon le temps restant à la pendule.
