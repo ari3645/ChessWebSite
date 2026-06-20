@@ -49,7 +49,65 @@ export class GameController {
         // Liaison des événements DOM
         this.bindEvents();
         this.updateTimeControls();
+        this.syncAiSettingsVisibility();
         this.updateView();
+
+        // Diagnostic protocole file://
+        if (window.location.protocol === 'file:') {
+            console.warn("[GameController] Attention : L'application est exécutée sous le protocole file://. Les Web Workers ES Modules seront bloqués par la sécurité CORS de votre navigateur.");
+            this.showProtocolWarningBanner();
+        }
+    }
+
+    showProtocolWarningBanner() {
+        if (document.getElementById('protocol-warning-banner')) return;
+        
+        const banner = document.createElement('div');
+        banner.id = 'protocol-warning-banner';
+        banner.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 600px;
+            background: rgba(239, 68, 68, 0.95);
+            color: #ffffff;
+            padding: 16px 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            z-index: 10000;
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            line-height: 1.5;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        `;
+        
+        banner.innerHTML = `
+            <div style="display: flex; align-items: flex-start; gap: 12px;">
+                <div style="font-size: 20px; line-height: 1;">⚠️</div>
+                <div style="flex-grow: 1;">
+                    <strong style="font-weight: 600; font-size: 15px; display: block; margin-bottom: 4px;">Sécurité du Navigateur (Protocole file:// détecté)</strong>
+                    Le moteur de l'IA (Web Worker) ne peut pas se charger car le fichier HTML est ouvert directement. 
+                    Pour jouer contre l'IA, lancez un serveur web local en ouvrant le projet dans VS Code avec l'extension <strong style="text-decoration: underline;">Live Server</strong>, ou en exécutant dans votre terminal :
+                    <code style="background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; display: block; margin: 8px 0; font-family: monospace; font-size: 12px;">python -m http.server 8000</code>
+                    Puis accédez à <code style="background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 12px;">http://localhost:8000</code>.
+                </div>
+                <button id="close-protocol-warning" style="background: none; border: none; color: white; font-size: 20px; cursor: pointer; line-height: 1; padding: 0;">&times;</button>
+            </div>
+        `;
+        
+        document.body.appendChild(banner);
+        
+        const closeBtn = document.getElementById('close-protocol-warning');
+        if (closeBtn) {
+            closeBtn.onclick = () => {
+                banner.style.opacity = '0';
+                setTimeout(() => banner.remove(), 300);
+            };
+        }
     }
 
     bindEvents() {
@@ -63,14 +121,13 @@ export class GameController {
             modeSelect.addEventListener('change', (e) => {
                 this.gameMode = e.target.value;
                 this.updateTimeControls();
+                this.syncAiSettingsVisibility();
                 if (this.gameMode === 'pvp') {
-                    if (aiSettings) aiSettings.style.display = 'none';
                     p1Input.disabled = false;
                     p2Input.disabled = false;
                     if (p1Input.value.startsWith('IA (')) p1Input.value = "Joueur 1";
                     if (p2Input.value.startsWith('IA (')) p2Input.value = "Joueur 2";
                 } else {
-                    if (aiSettings) aiSettings.style.display = 'block';
                     if (this.gameMode === 'pve-black') {
                         p1Input.disabled = false;
                         p2Input.disabled = true;
@@ -176,10 +233,13 @@ export class GameController {
         });
 
 
-        // Bouton reprendre
-        document.getElementById('btn-resume').addEventListener('click', () => {
-            this.resumeGame();
-        });
+        // Bouton reprendre (si présent dans le DOM / tests)
+        const btnResume = document.getElementById('btn-resume');
+        if (btnResume) {
+            btnResume.addEventListener('click', () => {
+                this.resumeGame();
+            });
+        }
 
         // Options en jeu
         const rotateBtn = document.getElementById('btn-rotate-board');
@@ -205,9 +265,15 @@ export class GameController {
 
         document.getElementById('btn-resign').addEventListener('click', () => {
             if (this.state !== "PLAYING") return;
-            if (confirm("Êtes-vous sûr de vouloir abandonner la partie ?")) {
-                const winnerColor = this.board.turn === 'b' ? 'n' : 'b';
-                this.endGame(winnerColor, "abandon");
+            if (this.gameMode === 'eve') {
+                if (confirm("Voulez-vous stopper la réflexion des IA et arrêter la partie ?")) {
+                    this.leaveGame();
+                }
+            } else {
+                if (confirm("Êtes-vous sûr de vouloir abandonner la partie ?")) {
+                    const winnerColor = this.board.turn === 'b' ? 'n' : 'b';
+                    this.endGame(winnerColor, "abandon");
+                }
             }
         });
 
@@ -305,6 +371,22 @@ export class GameController {
         });
     }
 
+    syncAiSettingsVisibility() {
+        const aiSettings = document.getElementById('ai-settings');
+        const diffGroup = document.getElementById('ai-difficulty-group');
+        
+        if (aiSettings) {
+            if (this.gameMode === 'pvp') {
+                aiSettings.style.display = 'none';
+            } else {
+                aiSettings.style.display = 'block';
+                if (diffGroup) {
+                    diffGroup.style.display = this.gameMode === 'eve' ? 'none' : 'block';
+                }
+            }
+        }
+    }
+
     startGame() {
         if (this.autoReplayTimeout) {
             clearTimeout(this.autoReplayTimeout);
@@ -378,12 +460,22 @@ export class GameController {
             // Conserver le worker s'il existe déjà pour éviter d'interrompre l'apprentissage
             if (!this.aiWorker) {
                 try {
-                    this.aiWorker = new Worker('./src/aiWorker.js', { type: 'module' });
+                    this.aiWorker = new Worker('./src/aiWorker.js');
                     this.aiWorker.onmessage = (e) => this.handleAiWorkerMessage(e);
                     this.aiWorker.onerror = (err) => {
-                        console.error("[GameController] Erreur critique dans le Web Worker :", err);
+                        console.error("[GameController] Détails de l'erreur du Worker :");
+                        console.error("Message :", err.message);
+                        console.error("Fichier :", err.filename);
+                        console.error("Ligne :", err.lineno);
+                        console.error("Colonne :", err.colno);
+                        console.error("Objet d'erreur complet :", err.error || err);
+                        
                         this.isAiThinking = false;
                         this.updateIndicators();
+                        
+                        if (window.location.protocol === 'file:') {
+                            this.showProtocolWarningBanner();
+                        }
                     };
                 } catch (err) {
                     console.error("Erreur d'initialisation du Web Worker IA :", err);
@@ -484,10 +576,7 @@ export class GameController {
             menu.classList.add('active');
             game.classList.remove('active');
             
-            // Afficher le bouton Reprendre si une sauvegarde existe
-            if (sessionStorage.getItem('chess_game_save')) {
-                btnResume.style.display = 'block';
-            } else {
+            if (btnResume) {
                 btnResume.style.display = 'none';
             }
         } else {
@@ -548,6 +637,20 @@ export class GameController {
         const btnDraw = document.getElementById('btn-draw');
         if (btnDraw) {
             btnDraw.style.display = this.gameMode === 'eve' ? 'none' : 'block';
+        }
+
+        // Adapter le bouton Abandonner en Stopper pour le mode IA vs IA (Entraînement)
+        const btnResign = document.getElementById('btn-resign');
+        if (btnResign) {
+            if (this.gameMode === 'eve') {
+                btnResign.textContent = "Stopper la partie";
+                btnResign.classList.remove('btn-danger');
+                btnResign.classList.add('btn-warning');
+            } else {
+                btnResign.textContent = "Abandonner";
+                btnResign.classList.remove('btn-warning');
+                btnResign.classList.add('btn-danger');
+            }
         }
 
         const currEvalEl = document.getElementById('curr-eval-display');
@@ -1516,7 +1619,7 @@ export class GameController {
         const turn = this.board.turn;
         const isP1Turn = (turn === 'b' && this.p1IsWhite) || (turn === 'n' && !this.p1IsWhite);
         
-        let depth = this.aiDifficulty;
+        let depth = this.gameMode === 'eve' ? 4 : this.aiDifficulty;
         let style = 'standard';
         
         if (this.gameMode === 'eve') {
@@ -1575,13 +1678,18 @@ export class GameController {
             clearTimeout(this.autoReplayTimeout);
             this.autoReplayTimeout = null;
         }
-        if (this.state !== "PLAYING") return;
         if (this.aiWorker) {
             this.aiWorker.terminate();
             this.aiWorker = null;
         }
         this.isAiThinking = false;
-        this.saveGameToSession();
+        
+        if (this.state === "PLAYING") {
+            this.saveGameToSession();
+        } else {
+            this.clearSavedGame();
+        }
+        
         this.stopTimer();
         this.state = "MENU";
         this.updateView();
@@ -1596,12 +1704,22 @@ export class GameController {
             this.isAiThinking = false;
 
             if (this.gameMode !== 'pvp') {
-                this.aiWorker = new Worker('./src/aiWorker.js', { type: 'module' });
+                this.aiWorker = new Worker('./src/aiWorker.js');
                 this.aiWorker.onmessage = (e) => this.handleAiWorkerMessage(e);
                 this.aiWorker.onerror = (err) => {
-                    console.error("[GameController] Erreur critique dans le Web Worker :", err);
+                    console.error("[GameController] Détails de l'erreur du Worker :");
+                    console.error("Message :", err.message);
+                    console.error("Fichier :", err.filename);
+                    console.error("Ligne :", err.lineno);
+                    console.error("Colonne :", err.colno);
+                    console.error("Objet d'erreur complet :", err.error || err);
+                    
                     this.isAiThinking = false;
                     this.updateIndicators();
+                    
+                    if (window.location.protocol === 'file:') {
+                        this.showProtocolWarningBanner();
+                    }
                 };
             }
 
@@ -1615,8 +1733,7 @@ export class GameController {
             const modeSelect = document.getElementById('game-mode');
             if (modeSelect) modeSelect.value = this.gameMode;
             this.updateTimeControls();
-            const aiSettings = document.getElementById('ai-settings');
-            if (aiSettings) aiSettings.style.display = this.gameMode === 'pvp' ? 'none' : 'block';
+            this.syncAiSettingsVisibility();
             const diffSelect = document.getElementById('ai-difficulty');
             if (diffSelect) diffSelect.value = this.aiDifficulty;
             const learningToggle = document.getElementById('ai-learning-toggle');
