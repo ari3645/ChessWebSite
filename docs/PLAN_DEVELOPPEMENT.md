@@ -66,6 +66,15 @@ Créer un jeu d'échecs fonctionnel pour deux joueurs en local avec une interfac
 - [x] Sauvegarde et chargement de partie (via sessionStorage).
 - [ ] (Amélioration) Outils d'analyse graphique en jeu : tracé de flèches (clic droit maintenu + glissé) et coloration des cases (clic droit simple).
 
+
+### 🟦 Étape 8 : Intégration de l'IA (En cours)
+- [x] Spécification et architecture (Pure JS avec Web Worker pour préserver la portabilité).
+- [x] Moteur de recherche brute force (Minimax + élagage Alpha-Beta + tri des coups + tables PST).
+- [x] Intégration dans le contrôleur (Menu de configuration, blocage des actions humaines pendant le calcul, auto-play IA vs IA).
+- [/] Apprentissage continu par renforcement (Livre d'ouvertures Q-learning terminé, ajustement heuristique TD-learning à venir).
+- [x] Persistance à long terme (IndexedDB).
+
+
 ---
 
 **Stack Technique Actuelle (Migration Web) :**

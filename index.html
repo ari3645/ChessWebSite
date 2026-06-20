@@ -62,6 +62,42 @@
                     </div>
                 </div>
 
+                <!-- Mode de jeu & Difficulté IA -->
+                <div class="mode-section">
+                    <div class="input-group">
+                        <label for="game-mode">Mode de Jeu</label>
+                        <select id="game-mode" class="select-modern">
+                            <option value="pvp" selected>Joueur vs Joueur (Local)</option>
+                            <option value="pve-black">Joueur vs IA (IA joue les Noirs)</option>
+                            <option value="pve-white">IA vs Joueur (IA joue les Blancs)</option>
+                            <option value="eve">IA vs IA (Entraînement)</option>
+                        </select>
+                    </div>
+
+                    <div id="ai-settings" class="ai-settings-group" style="display: none; margin-top: 15px;">
+                        <div class="input-group">
+                            <label for="ai-difficulty">Niveau de l'IA</label>
+                            <select id="ai-difficulty" class="select-modern">
+                                <option value="1">Facile (Profondeur 1)</option>
+                                <option value="2">Moyen (Profondeur 2)</option>
+                                <option value="3" selected>Difficile (Profondeur 3)</option>
+                                <option value="4">Expert (Profondeur 4)</option>
+                            </select>
+                        </div>
+                        <div class="option-row" style="margin-top: 15px;">
+                            <div class="option-info">
+                                <span class="option-title">Apprentissage IA</span>
+                                <span class="option-desc">L'IA apprend au fur et à mesure des parties.</span>
+                            </div>
+                            <label class="switch">
+                                <input type="checkbox" id="ai-learning-toggle" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+
                 <!-- Options -->
                 <div class="game-options">
                     <div class="option-row">
@@ -94,6 +130,7 @@
                             <span class="player-color-dot black-dot" id="opp-color-indicator"></span>
                             <span class="player-name-display" id="opp-name-display">Joueur 2</span>
                             <span class="player-score" id="opp-score-display">(0.0)</span>
+                            <span class="player-eval-badge" id="opp-eval-display" style="display: none;"></span>
                         </div>
                         <div class="timer-display opponent-timer" id="opp-timer">--:--</div>
                     </div>
@@ -109,7 +146,24 @@
                         <div id="board" class="chessboard">
                             <!-- Les cases et les pièces seront générées dynamiquement en JS -->
                         </div>
+                        <!-- Boutons flottants latéraux (Rotation et Paramètres) -->
+                        <div class="board-floating-controls">
+                            <button id="btn-rotate-board" class="btn-floating" title="Tourner l'échiquier">
+                                <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <polyline points="1 20 1 14 7 14"></polyline>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                </svg>
+                            </button>
+                            <button id="btn-settings-toggle" class="btn-floating" style="margin-top: 10px;" title="Thèmes & Paramètres">
+                                <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
+
 
                     <!-- Indicateur du joueur actif en bas -->
                     <div class="player-bar current-bar">
@@ -117,6 +171,7 @@
                             <span class="player-color-dot white-dot" id="curr-color-indicator"></span>
                             <span class="player-name-display" id="curr-name-display">Joueur 1</span>
                             <span class="player-score" id="curr-score-display">(0.0)</span>
+                            <span class="player-eval-badge" id="curr-eval-display" style="display: none;"></span>
                         </div>
                         <div class="timer-display current-timer" id="curr-timer">--:--</div>
                     </div>
@@ -156,11 +211,7 @@
                     <div class="sidebar-footer">
                         <!-- Options en jeu -->
                         <div class="game-actions">
-                            <button id="btn-rotate" class="btn btn-secondary btn-icon" title="Activer/Désactiver la rotation automatique">
-                                <svg class="icon" viewBox="0 0 24 24"><path d="M7 9h-7v-7h1.93c.31.54.69 1.05 1.12 1.52 1.91-2.09 4.67-3.52 7.95-3.52 6.07 0 11 4.93 11 11s-4.93 11-11 11c-4.48 0-8.34-2.68-10.07-6.54l1.86-.75c1.37 3.05 4.4 5.29 7.96 5.29 4.97 0 9-4.03 9-9s-4.03-9-9-9c-2.61 0-4.93 1.12-6.57 2.91l1.63 1.63h-6.94z"/></svg>
-                                <span id="rotate-label">Rotation Auto : OFF</span>
-                            </button>
-                            
+
                             <button id="btn-leave" class="btn btn-secondary">
                                 Menu Principal
                             </button>

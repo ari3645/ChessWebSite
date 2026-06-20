@@ -15,6 +15,33 @@ export class Board {
         this.positionHistory[this.getPositionSignature()] = 1;
     }
 
+    clone() {
+        const newBoard = new Board();
+        newBoard.loadState(this.getState());
+        return newBoard;
+    }
+
+    getState() {
+        return {
+            grid: this.grid.map(row => [...row]),
+            turn: this.turn,
+            movedStatus: { ...this.movedStatus },
+            enPassantTarget: this.enPassantTarget ? { ...this.enPassantTarget } : null,
+            halfMoveClock: this.halfMoveClock,
+            positionHistory: { ...this.positionHistory }
+        };
+    }
+
+    loadState(state) {
+        this.grid = state.grid.map(row => [...row]);
+        this.turn = state.turn;
+        this.movedStatus = { ...state.movedStatus };
+        this.enPassantTarget = state.enPassantTarget ? { ...state.enPassantTarget } : null;
+        this.halfMoveClock = state.halfMoveClock;
+        this.positionHistory = { ...state.positionHistory };
+    }
+
+
     getPositionSignature() {
         const boardStr = this.grid.map(row => row.map(p => p === "" ? "." : p).join("")).join("");
         const movedStr = Object.keys(this.movedStatus).sort().map(k => this.movedStatus[k] ? "1" : "0").join("");
@@ -367,10 +394,12 @@ export class Board {
                     const rook = this.grid[start.r][7];
                     this.grid[start.r][5] = rook;
                     this.grid[start.r][7] = "";
+                    this.movedStatus[`${start.r},7`] = true;
                 } else { // Grand roque
                     const rook = this.grid[start.r][0];
                     this.grid[start.r][3] = rook;
                     this.grid[start.r][0] = "";
+                    this.movedStatus[`${start.r},0`] = true;
                 }
             }
 

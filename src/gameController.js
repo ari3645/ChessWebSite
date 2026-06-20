@@ -11,6 +11,7 @@ export class GameController {
         // Joueurs et Scores
         this.player1Name = "Joueur 1";
         this.player2Name = "Joueur 2";
+        this.humanPlayerName = "Joueur";
         this.scoreP1 = 0.0;
         this.scoreP2 = 0.0;
         this.p1IsWhite = true; // Si P1 est blanc (si faux, P1 est noir)
@@ -26,20 +27,84 @@ export class GameController {
         // Sélection
         this.selectedSq = null;
         this.validMoves = [];
-        this.autoRotate = false;
+        this.boardRotated = false;
         
         // Promotion en attente
         this.waitingPromotionMove = null; // {start, end}
+
+        // Mode de jeu et IA
+        this.gameMode = "pvp"; // "pvp", "pve-black", "pve-white", "eve"
+        this.aiDifficulty = 3;
+        this.aiLearning = true;
+        this.aiWorker = null;
+        this.isAiThinking = false;
+        this.whiteAiEvaluation = null;
+        this.blackAiEvaluation = null;
         
         // Historique complet
         this.moveHistory = []; // Liste des coups joués en notation algébrique
+        this.autoReplayTimeout = null;
+
         
         // Liaison des événements DOM
         this.bindEvents();
+        this.updateTimeControls();
         this.updateView();
     }
 
     bindEvents() {
+        // Mode de jeu, Difficulté et Apprentissage
+        const modeSelect = document.getElementById('game-mode');
+        const aiSettings = document.getElementById('ai-settings');
+        const p1Input = document.getElementById('player1-name');
+        const p2Input = document.getElementById('player2-name');
+
+        if (modeSelect) {
+            modeSelect.addEventListener('change', (e) => {
+                this.gameMode = e.target.value;
+                this.updateTimeControls();
+                if (this.gameMode === 'pvp') {
+                    if (aiSettings) aiSettings.style.display = 'none';
+                    p1Input.disabled = false;
+                    p2Input.disabled = false;
+                    if (p1Input.value.startsWith('IA (')) p1Input.value = "Joueur 1";
+                    if (p2Input.value.startsWith('IA (')) p2Input.value = "Joueur 2";
+                } else {
+                    if (aiSettings) aiSettings.style.display = 'block';
+                    if (this.gameMode === 'pve-black') {
+                        p1Input.disabled = false;
+                        p2Input.disabled = true;
+                        if (p1Input.value.startsWith('IA (')) p1Input.value = "Joueur 1";
+                        p2Input.value = "IA (Noirs)";
+                    } else if (this.gameMode === 'pve-white') {
+                        p1Input.disabled = true;
+                        p2Input.disabled = false;
+                        p1Input.value = "IA (Blancs)";
+                        if (p2Input.value.startsWith('IA (')) p2Input.value = "Joueur 2";
+                    } else if (this.gameMode === 'eve') {
+                        p1Input.disabled = true;
+                        p2Input.disabled = true;
+                        p1Input.value = "IA (Blancs)";
+                        p2Input.value = "IA (Noirs)";
+                    }
+                }
+            });
+        }
+
+        const diffSelect = document.getElementById('ai-difficulty');
+        if (diffSelect) {
+            diffSelect.addEventListener('change', (e) => {
+                this.aiDifficulty = parseInt(e.target.value);
+            });
+        }
+
+        const learningToggle = document.getElementById('ai-learning-toggle');
+        if (learningToggle) {
+            learningToggle.addEventListener('change', (e) => {
+                this.aiLearning = e.target.checked;
+            });
+        }
+
         // Boutons de nettoyage du menu
         document.getElementById('btn-clear-p1').addEventListener('click', () => {
             document.getElementById('player1-name').value = "";
@@ -54,6 +119,8 @@ export class GameController {
         const timeBtns = document.querySelectorAll('.time-btn');
         timeBtns.forEach(btn => {
             btn.addEventListener('click', (e) => {
+                if (this.gameMode !== 'pvp') return;
+                
                 timeBtns.forEach(b => b.classList.remove('active'));
                 const targetBtn = e.currentTarget;
                 targetBtn.classList.add('active');
@@ -73,27 +140,41 @@ export class GameController {
 
         // Bouton jouer du menu
         document.getElementById('btn-play').addEventListener('click', () => {
-            const p1 = document.getElementById('player1-name').value.trim();
-            const p2 = document.getElementById('player2-name').value.trim();
+            try {
+                const p1 = document.getElementById('player1-name').value.trim();
+                const p2 = document.getElementById('player2-name').value.trim();
 
-            if (p1 === "" || p2 === "") {
-                alert("Veuillez saisir un nom pour chaque joueur !");
-                return;
-            }
-            if (p1.toLowerCase() === p2.toLowerCase()) {
-                alert("Les joueurs doivent avoir des noms différents !");
-                return;
-            }
+                if (p1 === "" || p2 === "") {
+                    alert("Veuillez saisir un nom pour chaque joueur !");
+                    return;
+                }
+                if (p1.toLowerCase() === p2.toLowerCase()) {
+                    alert("Les joueurs doivent avoir des noms différents !");
+                    return;
+                }
 
-            this.player1Name = p1;
-            this.player2Name = p2;
-            
-            // Lancer le jeu
-            this.scoreP1 = 0.0;
-            this.scoreP2 = 0.0;
-            this.p1IsWhite = true;
-            this.startGame();
+                if (this.gameMode === 'pve-black') {
+                    this.humanPlayerName = p1;
+                } else if (this.gameMode === 'pve-white') {
+                    this.humanPlayerName = p2;
+                } else {
+                    this.humanPlayerName = "Joueur";
+                }
+
+                this.player1Name = p1;
+                this.player2Name = p2;
+                
+                // Lancer le jeu
+                this.scoreP1 = 0.0;
+                this.scoreP2 = 0.0;
+                this.p1IsWhite = true;
+                this.startGame();
+            } catch (error) {
+                console.error("Erreur lors du démarrage du jeu :", error);
+                alert("Erreur lors du démarrage du jeu : " + error.message);
+            }
         });
+
 
         // Bouton reprendre
         document.getElementById('btn-resume').addEventListener('click', () => {
@@ -101,11 +182,22 @@ export class GameController {
         });
 
         // Options en jeu
-        document.getElementById('btn-rotate').addEventListener('click', () => {
-            this.autoRotate = !this.autoRotate;
-            document.getElementById('rotate-label').textContent = this.autoRotate ? "Rotation Auto : ON" : "Rotation Auto : OFF";
-            this.renderBoard();
-        });
+        const rotateBtn = document.getElementById('btn-rotate-board');
+        if (rotateBtn) {
+            rotateBtn.addEventListener('click', () => {
+                this.boardRotated = !this.boardRotated;
+                this.renderLayout();
+                this.renderBoard();
+                this.saveGameToSession();
+            });
+        }
+
+        const settingsBtn = document.getElementById('btn-settings-toggle');
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', () => {
+                console.log("Settings panel stub clicked");
+            });
+        }
 
         document.getElementById('btn-leave').addEventListener('click', () => {
             this.leaveGame();
@@ -214,12 +306,46 @@ export class GameController {
     }
 
     startGame() {
+        if (this.autoReplayTimeout) {
+            clearTimeout(this.autoReplayTimeout);
+            this.autoReplayTimeout = null;
+        }
         this.clearSavedGame();
         this.board = new Board();
         this.selectedSq = null;
         this.validMoves = [];
         this.moveHistory = [];
         this.currentHistoryIndex = -1;
+        this.whiteAiEvaluation = null;
+        this.blackAiEvaluation = null;
+
+        // Mettre à jour les noms des joueurs en fonction du mode de jeu et de l'alternance des couleurs
+        if (this.gameMode === 'eve') {
+            this.player1Name = "IA Défensive";
+            this.player2Name = "IA Testeuse";
+        } else if (this.gameMode === 'pve-white') {
+            if (this.p1IsWhite) {
+                this.player1Name = "IA";
+                this.player2Name = this.humanPlayerName || "Joueur";
+            } else {
+                this.player1Name = this.humanPlayerName || "Joueur";
+                this.player2Name = "IA";
+            }
+        } else if (this.gameMode === 'pve-black') {
+            if (this.p1IsWhite) {
+                this.player1Name = this.humanPlayerName || "Joueur";
+                this.player2Name = "IA";
+            } else {
+                this.player1Name = "IA";
+                this.player2Name = this.humanPlayerName || "Joueur";
+            }
+        }
+
+        // Pour les parties avec IA, forcer le mode sans temps (Amical)
+        if (this.gameMode !== 'pvp') {
+            this.selectedTimeLimit = null;
+            this.selectedIncrement = null;
+        }
 
         // Initialiser les chronomètres
         if (this.selectedTimeLimit !== null) {
@@ -241,11 +367,36 @@ export class GameController {
             timeP2: this.timeP2
         };
         
+        this.isAiThinking = false;
+
+        if (this.gameMode === 'pvp') {
+            if (this.aiWorker) {
+                this.aiWorker.terminate();
+                this.aiWorker = null;
+            }
+        } else {
+            // Conserver le worker s'il existe déjà pour éviter d'interrompre l'apprentissage
+            if (!this.aiWorker) {
+                try {
+                    this.aiWorker = new Worker('./src/aiWorker.js', { type: 'module' });
+                    this.aiWorker.onmessage = (e) => this.handleAiWorkerMessage(e);
+                } catch (err) {
+                    console.error("Erreur d'initialisation du Web Worker IA :", err);
+                    alert("Impossible de démarrer le moteur de l'IA (CORS/file:// bloqué par le navigateur ou type:module non supporté). La partie va démarrer en mode d'évaluation locale si possible, ou vous pouvez héberger l'application sur un serveur local.");
+                }
+            }
+        }
+
         this.state = "PLAYING";
         this.lastTickTime = Date.now();
         this.startTimer();
         this.updateView();
         this.soundManager.initAudioContext();
+
+
+        if (this.isAiTurn()) {
+            setTimeout(() => this.triggerAiSearch(), 500);
+        }
     }
 
     startTimer() {
@@ -283,6 +434,37 @@ export class GameController {
         if (this.timerInterval) {
             clearInterval(this.timerInterval);
             this.timerInterval = null;
+        }
+    }
+
+    updateTimeControls() {
+        const isAiMode = this.gameMode !== 'pvp';
+        const timeBtns = document.querySelectorAll('.time-btn');
+        timeBtns.forEach(btn => {
+            const isNoTime = btn.getAttribute('data-time') === "null";
+            if (isAiMode) {
+                if (!isNoTime) {
+                    btn.classList.add('disabled-ai');
+                    btn.classList.remove('active');
+                } else {
+                    btn.classList.add('active');
+                }
+            } else {
+                btn.classList.remove('disabled-ai');
+                const time = btn.getAttribute('data-time');
+                const inc = btn.getAttribute('data-inc');
+                const tVal = time === "null" ? null : parseInt(time);
+                const iVal = inc === "null" ? null : parseInt(inc);
+                if (this.selectedTimeLimit === tVal && this.selectedIncrement === iVal) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            }
+        });
+        if (isAiMode) {
+            this.selectedTimeLimit = null;
+            this.selectedIncrement = null;
         }
     }
 
@@ -326,9 +508,8 @@ export class GameController {
         const blackName = this.p1IsWhite ? p2Name : p1Name;
         const blackScore = this.p1IsWhite ? score2 : score1;
 
-        // Détecter qui est en haut et qui est en bas selon qui a le trait ou la rotation
-        const isBlackTurn = this.board.turn === 'n';
-        const shouldRotate = this.autoRotate && isBlackTurn;
+        // Détecter qui est en haut et qui est en bas selon la rotation manuelle
+        const shouldRotate = this.boardRotated;
 
         const currIndicator = document.getElementById('curr-color-indicator');
         const currName = document.getElementById('curr-name-display');
@@ -356,6 +537,53 @@ export class GameController {
             oppIndicator.className = "player-color-dot black-dot";
             oppName.textContent = blackName;
             oppScore.textContent = `(${blackScore})`;
+        }
+
+        // Masquer le bouton de proposition de nulle en mode IA vs IA (Entraînement)
+        const btnDraw = document.getElementById('btn-draw');
+        if (btnDraw) {
+            btnDraw.style.display = this.gameMode === 'eve' ? 'none' : 'block';
+        }
+
+        const currEvalEl = document.getElementById('curr-eval-display');
+        const oppEvalEl = document.getElementById('opp-eval-display');
+        
+        if (currEvalEl) currEvalEl.style.display = 'none';
+        if (oppEvalEl) oppEvalEl.style.display = 'none';
+
+        if (this.gameMode === 'eve') {
+            const formatEval = (score) => {
+                if (score === null || score === undefined) return null;
+                if (Math.abs(score) > 90000) {
+                    return score > 0 ? "+Mat" : "-Mat";
+                }
+                const val = score / 100;
+                return val > 0 ? `+${val.toFixed(1)}` : `${val.toFixed(1)}`;
+            };
+
+            const isBottomWhite = !this.boardRotated ? this.p1IsWhite : !this.p1IsWhite;
+            
+            let bottomScoreText = null;
+            let topScoreText = null;
+            
+            if (isBottomWhite) {
+                bottomScoreText = formatEval(this.whiteAiEvaluation);
+                topScoreText = formatEval(this.blackAiEvaluation);
+            } else {
+                bottomScoreText = formatEval(this.blackAiEvaluation);
+                topScoreText = formatEval(this.whiteAiEvaluation);
+            }
+
+            if (currEvalEl && bottomScoreText !== null) {
+                currEvalEl.textContent = bottomScoreText;
+                currEvalEl.style.display = 'inline-block';
+                currEvalEl.className = 'player-eval-badge';
+            }
+            if (oppEvalEl && topScoreText !== null) {
+                oppEvalEl.textContent = topScoreText;
+                oppEvalEl.style.display = 'inline-block';
+                oppEvalEl.className = 'player-eval-badge';
+            }
         }
 
         this.updateIndicators();
@@ -387,8 +615,13 @@ export class GameController {
             activeTurn = this.board.turn;
             activeName = this.getActivePlayerName();
             const turnColor = activeTurn === 'b' ? 'Blancs' : 'Noirs';
-            turnDisplay.textContent = `Trait aux ${turnColor} (${activeName})`;
+            if (this.isAiThinking) {
+                turnDisplay.textContent = `L'IA réfléchit... (${activeName})`;
+            } else {
+                turnDisplay.textContent = `Trait aux ${turnColor} (${activeName})`;
+            }
         }
+
         
         // La bordure lumineuse du chronomètre actif correspond :
         // - au joueur actif du jeu en direct si la partie est en cours (pour indiquer à qui est le tour réel)
@@ -401,8 +634,7 @@ export class GameController {
         }
 
         const isBlackActive = activeHighlightTurn === 'n';
-        const liveIsBlack = this.board.turn === 'n';
-        const shouldRotate = this.autoRotate && liveIsBlack;
+        const shouldRotate = this.boardRotated;
 
         const currTimerEl = document.getElementById('curr-timer');
         const oppTimerEl = document.getElementById('opp-timer');
@@ -427,8 +659,7 @@ export class GameController {
     }
 
     renderTimers() {
-        const liveIsBlack = this.board.turn === 'n';
-        const shouldRotate = this.autoRotate && liveIsBlack;
+        const shouldRotate = this.boardRotated;
 
         const currTimerEl = document.getElementById('curr-timer');
         const oppTimerEl = document.getElementById('opp-timer');
@@ -506,9 +737,8 @@ export class GameController {
             lastMoveEnd = histItem.end;
         }
 
-        // Utiliser le tour actif du jeu en direct pour la rotation, évitant que l'échiquier ne tourne à chaque coup en lisant l'historique
-        const liveIsBlackTurn = this.board.turn === 'n';
-        const shouldRotate = this.autoRotate && liveIsBlackTurn;
+        // Utiliser l'orientation manuelle de l'échiquier
+        const shouldRotate = this.boardRotated;
 
         // Détection de la case du Roi en échec
         let checkSquare = null;
@@ -602,8 +832,12 @@ export class GameController {
     handleSquareClick(r, c) {
         if (this.state !== "PLAYING") return;
 
+        // Bloquer toute action si c'est le tour de l'IA ou qu'elle réfléchit
+        if (this.isAiTurn() || this.isAiThinking) return;
+
         // Bloquer toute action sur l'échiquier si on parcourt l'historique
         const isLatest = this.currentHistoryIndex === this.moveHistory.length - 1;
+
         if (!isLatest) return;
 
         const piece = this.board.getPiece(r, c);
@@ -726,7 +960,12 @@ export class GameController {
                 this.renderBoard();
                 this.renderTimers();
                 this.renderHistory();
+
+                if (this.isAiTurn()) {
+                    setTimeout(() => this.triggerAiSearch(), 500);
+                }
             }
+
         }
     }
 
@@ -944,8 +1183,30 @@ export class GameController {
     }
 
     endGame(winnerColor, reason) {
+        if (this.aiWorker) {
+            if (this.aiLearning && this.moveHistory.length > 0) {
+                const gameHistoryForLearning = this.moveHistory.map((h, idx) => {
+                    const prevState = idx === 0 ? this.initialBoardState : this.moveHistory[idx - 1].boardState;
+                    return {
+                        start: h.start,
+                        end: h.end,
+                        boardState: prevState
+                    };
+                });
+
+                this.aiWorker.postMessage({
+                    type: 'learn',
+                    gameHistory: gameHistoryForLearning,
+                    result: winnerColor
+                });
+            }
+        }
+        this.isAiThinking = false;
+
         this.clearSavedGame();
         this.state = "GAME_OVER";
+
+
         this.stopTimer();
         this.selectedSq = null;
         this.validMoves = [];
@@ -1000,6 +1261,35 @@ export class GameController {
         // Ouvrir l'overlay
         document.getElementById('game-over-overlay').classList.add('active');
         this.renderLayout(); // rafraîchir les scores affichés
+
+        // Nettoyer d'anciens statuts d'auto-rejouer s'ils existent
+        const oldStatus = document.getElementById('auto-replay-status');
+        if (oldStatus) {
+            oldStatus.remove();
+        }
+
+        // Si c'est le mode IA vs IA (Entraînement), relancer automatiquement après 4 secondes
+        if (this.gameMode === 'eve') {
+            const statusText = document.createElement('div');
+            statusText.id = "auto-replay-status";
+            statusText.style.marginTop = "15px";
+            statusText.style.color = "var(--color-accent-hover)";
+            statusText.style.fontWeight = "600";
+            statusText.style.fontSize = "0.9rem";
+            statusText.textContent = "Une nouvelle partie IA vs IA va commencer dans 4 secondes...";
+            
+            reasonEl.appendChild(statusText);
+
+            if (this.autoReplayTimeout) {
+                clearTimeout(this.autoReplayTimeout);
+            }
+            this.autoReplayTimeout = setTimeout(() => {
+                const overlay = document.getElementById('game-over-overlay');
+                if (overlay) overlay.classList.remove('active');
+                this.p1IsWhite = !this.p1IsWhite; // Alterner les couleurs
+                this.startGame();
+            }, 4000);
+        }
     }
 
     getActivePlayerName() {
@@ -1137,10 +1427,13 @@ export class GameController {
             selectedIncrement: this.selectedIncrement,
             timeP1: this.timeP1,
             timeP2: this.timeP2,
-            autoRotate: this.autoRotate,
+            boardRotated: this.boardRotated,
             moveHistory: this.moveHistory,
             currentHistoryIndex: this.currentHistoryIndex,
             initialBoardState: this.initialBoardState,
+            gameMode: this.gameMode,
+            aiDifficulty: this.aiDifficulty,
+            aiLearning: this.aiLearning,
             board: {
                 grid: this.board.grid,
                 turn: this.board.turn,
@@ -1167,10 +1460,13 @@ export class GameController {
             this.selectedIncrement = data.selectedIncrement;
             this.timeP1 = data.timeP1;
             this.timeP2 = data.timeP2;
-            this.autoRotate = data.autoRotate;
+            this.boardRotated = data.boardRotated || false;
             this.moveHistory = data.moveHistory;
             this.currentHistoryIndex = data.currentHistoryIndex;
             this.initialBoardState = data.initialBoardState;
+            this.gameMode = data.gameMode || "pvp";
+            this.aiDifficulty = data.aiDifficulty || 3;
+            this.aiLearning = data.aiLearning !== undefined ? data.aiLearning : true;
 
             this.board = new Board();
             this.board.grid = data.board.grid;
@@ -1191,8 +1487,95 @@ export class GameController {
         sessionStorage.removeItem('chess_game_save');
     }
 
+    isAiTurn() {
+        if (this.state !== "PLAYING") return false;
+        
+        const turn = this.board.turn; // 'b' = Blancs, 'n' = Noirs
+        
+        const isP1Turn = (turn === 'b' && this.p1IsWhite) || (turn === 'n' && !this.p1IsWhite);
+        const isP2Turn = !isP1Turn;
+        
+        if (this.gameMode === 'eve') return true;
+        if (this.gameMode === 'pve-white' && isP1Turn) return true;
+        if (this.gameMode === 'pve-black' && isP2Turn) return true;
+        
+        return false;
+    }
+
+    triggerAiSearch() {
+        if (!this.isAiTurn() || this.isAiThinking) return;
+        
+        this.isAiThinking = true;
+        this.updateIndicators();
+        
+        const turn = this.board.turn;
+        const isP1Turn = (turn === 'b' && this.p1IsWhite) || (turn === 'n' && !this.p1IsWhite);
+        
+        let depth = this.aiDifficulty;
+        let style = 'standard';
+        
+        if (this.gameMode === 'eve') {
+            if (isP1Turn) {
+                style = 'defensive';
+            } else {
+                style = 'aggressive';
+            }
+        }
+        
+        this.aiWorker.postMessage({
+            type: 'search',
+            boardState: this.board.getState(),
+            depth: depth,
+            style: style,
+            useLearning: this.aiLearning
+        });
+    }
+
+
+    handleAiWorkerMessage(e) {
+        const { type, success, bestMove, error, evaluation } = e.data;
+        
+        if (type === 'searchResult') {
+            this.isAiThinking = false;
+            if (success) {
+                if (evaluation !== undefined) {
+                    if (this.board.turn === 'b') {
+                        this.whiteAiEvaluation = evaluation;
+                    } else {
+                        this.blackAiEvaluation = evaluation;
+                    }
+                }
+                this.renderLayout(); // Mettre à jour visuellement les badges
+            }
+            this.updateIndicators();
+            
+            if (success && bestMove) {
+                const activePiece = this.board.grid[bestMove.start.r][bestMove.start.c];
+                const isPawn = activePiece && activePiece[0] === 'p';
+                const isPromoRow = activePiece && ((activePiece[1] === 'b' && bestMove.end.r === 0) || (activePiece[1] === 'n' && bestMove.end.r === 7));
+                const promoChoice = (isPawn && isPromoRow) ? 'd' : 'd';
+                
+                this.executeMove(bestMove.start, bestMove.end, promoChoice);
+            } else {
+                console.error("Erreur de recherche de l'IA :", error);
+            }
+        } else if (type === 'learnComplete') {
+            console.log("[IA] Apprentissage terminé dans le worker.", success ? "Succès" : "Erreur: " + error);
+        }
+    }
+
+
     leaveGame() {
+        if (this.autoReplayTimeout) {
+            clearTimeout(this.autoReplayTimeout);
+            this.autoReplayTimeout = null;
+        }
         if (this.state !== "PLAYING") return;
+        if (this.aiWorker) {
+            this.aiWorker.terminate();
+            this.aiWorker = null;
+        }
+        this.isAiThinking = false;
         this.saveGameToSession();
         this.stopTimer();
         this.state = "MENU";
@@ -1201,11 +1584,37 @@ export class GameController {
 
     resumeGame() {
         if (this.loadGameFromSession()) {
+            if (this.aiWorker) {
+                this.aiWorker.terminate();
+                this.aiWorker = null;
+            }
+            this.isAiThinking = false;
+
+            if (this.gameMode !== 'pvp') {
+                this.aiWorker = new Worker('./src/aiWorker.js', { type: 'module' });
+                this.aiWorker.onmessage = (e) => this.handleAiWorkerMessage(e);
+            }
+
             this.state = "PLAYING";
             this.lastTickTime = Date.now();
             this.startTimer();
             this.updateView();
             this.soundManager.initAudioContext();
+
+            // Rétablir la valeur des contrôles de l'interface
+            const modeSelect = document.getElementById('game-mode');
+            if (modeSelect) modeSelect.value = this.gameMode;
+            this.updateTimeControls();
+            const aiSettings = document.getElementById('ai-settings');
+            if (aiSettings) aiSettings.style.display = this.gameMode === 'pvp' ? 'none' : 'block';
+            const diffSelect = document.getElementById('ai-difficulty');
+            if (diffSelect) diffSelect.value = this.aiDifficulty;
+            const learningToggle = document.getElementById('ai-learning-toggle');
+            if (learningToggle) learningToggle.checked = this.aiLearning;
+
+            if (this.isAiTurn()) {
+                setTimeout(() => this.triggerAiSearch(), 500);
+            }
         }
     }
 }

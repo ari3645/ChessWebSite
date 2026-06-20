@@ -2,26 +2,6 @@ export class SoundManager {
     constructor() {
         this.enabled = true;
         this.ctx = null;
-        this.sounds = {};
-        
-        // Liste des fichiers locaux
-        this.soundNames = ['move', 'capture', 'check', 'castle', 'promote', 'game_over'];
-        this.loadLocalSounds();
-    }
-
-    loadLocalSounds() {
-        this.soundNames.forEach(name => {
-            const audio = new Audio();
-            // On teste en format mp3 puis wav
-            audio.src = `assets/sounds/${name}.mp3`;
-            const onError = () => {
-                // Si le mp3 échoue, on tente le wav local une seule fois
-                audio.removeEventListener('error', onError);
-                audio.src = `assets/sounds/${name}.wav`;
-            };
-            audio.addEventListener('error', onError);
-            this.sounds[name] = audio;
-        });
     }
 
     initAudioContext() {
@@ -35,19 +15,8 @@ export class SoundManager {
 
     play(name) {
         if (!this.enabled) return;
-
-        // Essayer d'abord de jouer le fichier audio local chargé
-        const localSound = this.sounds[name];
-        if (localSound && localSound.readyState >= 2) {
-            localSound.currentTime = 0;
-            localSound.play().catch(() => {
-                // Si le navigateur bloque l'autoplay, on passe à la synthèse Web Audio
-                this.synthesizeSound(name);
-            });
-        } else {
-            // Pas de fichier audio local -> Synthèse en direct !
-            this.synthesizeSound(name);
-        }
+        // Synthèse en direct pour éviter les requêtes réseau et les erreurs 404 !
+        this.synthesizeSound(name);
     }
 
     synthesizeSound(name) {

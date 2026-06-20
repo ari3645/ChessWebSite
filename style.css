@@ -249,6 +249,17 @@ body {
     box-shadow: var(--shadow-glow);
 }
 
+.time-btn.disabled-ai {
+    opacity: 0.25;
+    cursor: not-allowed;
+    pointer-events: none;
+    transform: none !important;
+    background: rgba(255, 255, 255, 0.01) !important;
+    border-color: rgba(255, 255, 255, 0.03) !important;
+    color: var(--text-muted) !important;
+    box-shadow: none !important;
+}
+
 .time-label {
     font-size: 1rem;
     font-weight: 700;
@@ -484,6 +495,20 @@ input:checked + .slider:before {
     font-weight: 400;
 }
 
+.player-eval-badge {
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 2.5px 8px;
+    border-radius: 6px;
+    margin-left: 8px;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-glass);
+}
+
 /* Chronomètre */
 .timer-display {
     font-family: monospace;
@@ -521,6 +546,7 @@ input:checked + .slider:before {
    CONCEPTION DE L'ÉCHIQUIER
    ========================================================================== */
 .board-container {
+    position: relative;
     width: 100%;
     aspect-ratio: 1 / 1;
     background: rgba(0, 0, 0, 0.2);
@@ -1066,3 +1092,102 @@ input:checked + .slider:before {
         padding: 4px 10px;
     }
 }
+
+/* Styles pour le sélecteur moderne d'IA et de modes */
+.select-modern {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    padding: 14px 16px;
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: all 0.25s ease;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+    background-size: 16px;
+}
+
+.select-modern:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.15);
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.select-modern option {
+    background: #1e293b;
+    color: #fff;
+}
+
+/* Boutons flottants à côté du plateau */
+.board-floating-controls {
+    position: absolute;
+    top: 8px;
+    right: -52px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 10;
+}
+
+.btn-floating {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid var(--border-glass);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: var(--shadow-main);
+    padding: 0;
+}
+
+.btn-floating:hover {
+    background: var(--color-accent);
+    border-color: var(--color-accent-hover);
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-glow);
+}
+
+#btn-rotate-board:hover svg {
+    transform: rotate(180deg);
+}
+
+#btn-rotate-board svg {
+    transition: transform 0.4s ease;
+}
+
+#btn-settings-toggle:hover svg {
+    transform: rotate(90deg);
+}
+
+#btn-settings-toggle svg {
+    transition: transform 0.4s ease;
+}
+
+@media (max-width: 900px) {
+    .board-floating-controls {
+        right: 12px;
+        top: 12px;
+    }
+    
+    .btn-floating {
+        background: rgba(30, 41, 59, 0.85);
+        width: 36px;
+        height: 36px;
+    }
+}
+

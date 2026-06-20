@@ -374,8 +374,8 @@
         <button id="btn-clear-p2"></button>
         <button id="btn-play"></button>
         <input type="checkbox" id="sound-toggle" checked />
-        <button id="btn-rotate"></button>
-        <span id="rotate-label">Rotation Auto : OFF</span>
+        <button id="btn-rotate-board"></button>
+        <button id="btn-settings-toggle"></button>
         <button id="btn-resign"></button>
         <button id="btn-draw"></button>
         <button id="btn-resume"></button>
@@ -547,7 +547,7 @@
                     const startTestTime = performance.now();
 
                     try {
-                        testFn(); // Exécution
+                        await testFn(); // Exécution
                         const endTestTime = performance.now();
                         const dur = (endTestTime - startTestTime).toFixed(1);
 

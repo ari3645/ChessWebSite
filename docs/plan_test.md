@@ -76,3 +76,10 @@ Ce document liste l'ensemble des scénarios de test validant le comportement et 
 *   [x] **test_sound_on_promotion** : S'assurer qu'une promotion sans échec joue le son `'promote'`.
 *   [x] **test_sound_on_promotion_with_check** : S'assurer qu'une promotion provoquant un échec joue le son `'check'` (priorité de l'échec).
 *   [x] **test_sound_on_castle** : S'assurer que le roque joue le son `'castle'`.
+
+### 10. Moteur IA et State Transfer
+*   [x] **test_board_state_transfer** : Vérifier que l'état complet du plateau est correctement exportable et importable (pour envoi au Web Worker).
+*   [x] **test_board_clone** : Valider que le clonage d'un plateau crée une copie indépendante (les modifications ultérieures n'impactent pas l'original).
+*   [x] **test_indexeddb_opening_book** : S'assurer du bon fonctionnement asynchrone d'écriture et de lecture dans la base de données IndexedDB servant au livre d'ouvertures de l'IA.
+
+

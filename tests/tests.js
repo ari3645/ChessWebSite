@@ -405,6 +405,56 @@ export const tests = {
             Assert.isTrue(board.isThreefoldRepetition(), "La position doit être nulle par triple répétition");
         },
 
+        "test_repetition_pgn_repro": () => {
+            const board = new Board();
+            // Clear board
+            for (let r = 0; r < 8; r++) board.grid[r].fill("");
+            
+            // Set up a simplified position that we can repeat
+            board.grid[7][6] = "rb"; // White King
+            board.grid[6][0] = "db"; // White Queen
+            board.grid[0][1] = "rn"; // Black King
+            board.grid[0][3] = "tn"; // Black Rook
+            board.grid[2][3] = "dn"; // Black Queen
+            board.grid[0][2] = "tn"; // Black Rook
+            board.turn = 'b';
+            
+            // Register initial position signature
+            board.positionHistory = {};
+            board.positionHistory[board.getPositionSignature()] = 1;
+            
+            // We will repeat:
+            // 1. Qb3 Re8 (Dame to b3, Rook to e8)
+            // 2. Qa2 Red8 (Dame to a2, Rook to d8)
+            // 3. Qb3 Re8 (Dame to b3, Rook to e8) -> 2nd time
+            // 4. Qa2 Red8 (Dame to a2, Rook to d8) -> 2nd time
+            // 5. Qb3 Re8 (Dame to b3, Rook to e8) -> 3rd time
+            
+            // Move 1
+            board.movePiece({ r: 6, c: 0 }, { r: 5, c: 1 }); // Qb3
+            board.movePiece({ r: 0, c: 3 }, { r: 0, c: 4 }); // Re8
+            
+            // Move 2
+            board.movePiece({ r: 5, c: 1 }, { r: 6, c: 0 }); // Qa2
+            board.movePiece({ r: 0, c: 4 }, { r: 0, c: 3 }); // Red8
+            
+            // Move 3
+            board.movePiece({ r: 6, c: 0 }, { r: 5, c: 1 }); // Qb3
+            board.movePiece({ r: 0, c: 3 }, { r: 0, c: 4 }); // Re8 (2nd time)
+            
+            // Move 4
+            board.movePiece({ r: 5, c: 1 }, { r: 6, c: 0 }); // Qa2
+            board.movePiece({ r: 0, c: 4 }, { r: 0, c: 3 }); // Red8 (2nd time)
+            
+            // Move 5
+            board.movePiece({ r: 6, c: 0 }, { r: 5, c: 1 }); // Qb3
+            const lastMove = board.movePiece({ r: 0, c: 3 }, { r: 0, c: 4 }); // Re8 (3rd time)
+            
+            Assert.isTrue(board.isThreefoldRepetition(), "La position répétée 3 fois doit être nulle");
+            Assert.isTrue(lastMove.draw, "Le dernier coup doit retourner un état de nulle");
+            Assert.equals(lastMove.drawReason, "repetition", "La raison du nul doit être 'repetition'");
+        },
+
         "test_insufficient_material": () => {
             const board = new Board();
             for (let r = 0; r < 8; r++) board.grid[r].fill("");
@@ -814,5 +864,101 @@ export const tests = {
             controller.executeMove({ r: 7, c: 4 }, { r: 7, c: 6 });
             Assert.equals(playedSound, "castle", "Le roque doit jouer le son 'castle'");
         }
+    },
+    
+    // -------------------------------------------------------------
+    // CATEGORY: Moteur IA et State Transfer
+    // -------------------------------------------------------------
+    "Moteur IA et State Transfer": {
+        "test_board_state_transfer": () => {
+            const board = new Board();
+            // Modifier l'état
+            board.grid[4][4] = "pb";
+            board.turn = 'n';
+            board.enPassantTarget = { r: 5, c: 4 };
+            board.halfMoveClock = 3;
+            
+            const state = board.getState();
+            
+            const targetBoard = new Board();
+            targetBoard.loadState(state);
+            
+            Assert.equals(targetBoard.turn, 'n', "Le trait doit correspondre");
+            Assert.equals(targetBoard.grid[4][4], "pb", "La case modifiée doit correspondre");
+            Assert.deepEquals(targetBoard.enPassantTarget, { r: 5, c: 4 }, "La cible en passant doit correspondre");
+            Assert.equals(targetBoard.halfMoveClock, 3, "L'horloge doit correspondre");
+        },
+
+        "test_board_clone": () => {
+            const board = new Board();
+            board.grid[4][4] = "pb";
+            
+            const clone = board.clone();
+            Assert.equals(clone.grid[4][4], "pb", "Le clone doit avoir la même case");
+            
+            // Modifier le clone et vérifier que l'original est intact
+            clone.grid[4][4] = "cb";
+            Assert.equals(board.grid[4][4], "pb", "L'original ne doit pas être impacté par les modifs du clone");
+            Assert.equals(clone.grid[4][4], "cb", "Le clone doit être modifié");
+        },
+
+        "test_indexeddb_opening_book": async () => {
+            const DB_NAME = "ChessAI_DB";
+            const STORE_NAME = "opening_book";
+            
+            const db = await new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, 1);
+                request.onupgradeneeded = (e) => {
+                    const database = e.target.result;
+                    if (!database.objectStoreNames.contains(STORE_NAME)) {
+                        database.createObjectStore(STORE_NAME, { keyPath: "signature" });
+                    }
+                };
+                request.onsuccess = (e) => resolve(e.target.result);
+                request.onerror = (e) => reject(e.target.error);
+            });
+            
+            const testSignature = "test_signature_dummy_position";
+            const testRecord = {
+                signature: testSignature,
+                moves: {
+                    "6,4-4,4": { q: 0.8, count: 1 }
+                }
+            };
+            
+            // Écriture du record
+            await new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], "readwrite");
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.put(testRecord);
+                request.onsuccess = () => resolve();
+                request.onerror = (e) => reject(e.target.error);
+            });
+            
+            // Lecture du record
+            const retrieved = await new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], "readonly");
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.get(testSignature);
+                request.onsuccess = (e) => resolve(e.target.result);
+                request.onerror = (e) => reject(e.target.error);
+            });
+            
+            Assert.isNotNull(retrieved, "Le record doit être récupéré depuis IndexedDB");
+            Assert.equals(retrieved.signature, testSignature, "La signature doit correspondre");
+            Assert.equals(retrieved.moves["6,4-4,4"].q, 0.8, "La Q-value doit correspondre");
+            
+            // Nettoyage
+            await new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], "readwrite");
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.delete(testSignature);
+                request.onsuccess = () => resolve();
+                request.onerror = (e) => reject(e.target.error);
+            });
+            
+            db.close();
+        }
     }
 };
+
